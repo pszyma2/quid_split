@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "963330623794",
+    "project_id": "quidsplit-3875c",
+    "storage_bucket": "quidsplit-3875c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:963330623794:android:09b5b5df5d9578cdce2f2b",
+        "android_client_info": {
+          "package_name": "com.example.quid_split"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDKN1HBx2I_0agxp5i6m9jQ_TJqK-wFuKk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
