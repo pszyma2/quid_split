@@ -129,11 +129,12 @@ class GroupService {
       allMemberIds: allMembers,
     );
 
-    // 5. Konwertujemy wynik na format przyjazny dla Firebase
+    // 5. Konwertujemy wynik na format przyjazny dla Firebase i dodajemy flagę isPaid
     final settlementData = transfers.map((t) => {
       'fromUserId': t.fromUserId,
       'toUserId': t.toUserId,
       'amount': t.amount,
+      'isPaid': false, // STARTOWA FLAGA DŁUGU (NIEOPŁACONY)
     }).toList();
 
     // 6. Zapisujemy wyniki w chmurze i zamykamy kłódkę
@@ -141,6 +142,36 @@ class GroupService {
       'status': 'closed',
       'settlement': settlementData,
       'settledAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // ZUPEŁNIE NOWA FUNKCJA DO ODHACZANIA DŁUGÓW W HISTORII
+  Future<void> toggleDebtPaymentStatus(String groupId, String fromUserId, String toUserId, bool newStatus) async {
+    final groupRef = _firestore.collection('groups').doc(groupId);
+
+    // Używamy transakcji, żeby bezpiecznie zaktualizować jeden konkretny dług w tablicy
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(groupRef);
+      if (!snapshot.exists) throw Exception('Group not found');
+
+      final data = snapshot.data()!;
+      List<dynamic> settlements = data['settlement'] ?? [];
+
+      // Przeszukujemy rozliczenia i zmieniamy status tylko tego konkretnego długu
+      final updatedSettlements = settlements.map((s) {
+        if (s['fromUserId'] == fromUserId && s['toUserId'] == toUserId) {
+          return {
+            'fromUserId': s['fromUserId'],
+            'toUserId': s['toUserId'],
+            'amount': s['amount'],
+            'isPaid': newStatus, // Wrzucamy nową wartość z przełącznika (true/false)
+          };
+        }
+        return s;
+      }).toList();
+
+      // Zapisujemy zaktualizowaną tablicę z powrotem do bazy
+      transaction.update(groupRef, {'settlement': updatedSettlements});
     });
   }
 }

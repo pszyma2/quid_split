@@ -240,7 +240,8 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
     }
   }
 
-  Widget _buildSettlementResults(List<dynamic> settlement) {
+  // ZMIENIONE: Przekazujemy parametr isAdmin, żeby tylko szef mógł odhaczać długi
+  Widget _buildSettlementResults(List<dynamic> settlement, bool isAdmin) {
     if (settlement.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(24.0),
@@ -271,6 +272,9 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
             final double amount = (s['amount'] as num).toDouble();
             final String fromId = s['fromUserId'];
             final String toId = s['toUserId'];
+            
+            // Odczytujemy flagę, a jak jej nie ma (stare grupy), traktujemy jako nieopłacone (false)
+            final bool isPaid = s['isPaid'] ?? false; 
 
             Future<String> resolveName(String id) async {
               if (id == widget.currentUserId) return 'You';
@@ -290,22 +294,71 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
-                  color: Colors.green.shade50,
+                  // Jak opłacone, to szare. Jak nieopłacone, to nasze zielone.
+                  color: isPaid ? Colors.grey.shade50 : Colors.green.shade50,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Colors.green.shade200),
+                    side: BorderSide(
+                      color: isPaid ? Colors.grey.shade300 : Colors.green.shade200,
+                    ),
                   ),
                   child: ListTile(
-                    leading: const Icon(Icons.payment, color: Colors.green),
-                    title: Text('$fromName must pay $toName', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    trailing: Text(
-                      '£${amount.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.green,
-                      ),
+                    leading: Icon(
+                      isPaid ? Icons.check_circle : Icons.payment, 
+                      color: isPaid ? Colors.grey : Colors.green
+                    ),
+                    title: Text(
+                      '$fromName must pay $toName', 
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        // Eleganckie przekreślenie rozliczonych długów
+                        decoration: isPaid ? TextDecoration.lineThrough : null,
+                        color: isPaid ? Colors.grey.shade600 : Colors.black,
+                      )
+                    ),
+                    subtitle: isPaid 
+                      ? Text('Settled', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.bold))
+                      : null,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min, // Żeby nie rozpychało na cały ekran
+                      children: [
+                        Text(
+                          '£${amount.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: isPaid ? Colors.grey.shade500 : Colors.green,
+                            decoration: isPaid ? TextDecoration.lineThrough : null,
+                          ),
+                        ),
+                        // Pokazujemy Checkbox tylko Administratorowi!
+                        if (isAdmin)
+                          Checkbox(
+                            value: isPaid,
+                            activeColor: Colors.grey,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                            onChanged: (bool? newValue) async {
+                              if (newValue != null) {
+                                try {
+                                  // Wywołanie naszej nowej funkcji z backendu
+                                  await _groupService.toggleDebtPaymentStatus(
+                                    widget.groupId, 
+                                    fromId, 
+                                    toId, 
+                                    newValue
+                                  );
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Error: $e')),
+                                    );
+                                  }
+                                }
+                              }
+                            },
+                          ),
+                      ],
                     ),
                   ),
                 );
@@ -390,7 +443,6 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                     }
 
                     return ListView.builder(
-                      // Usunąłem sztuczny bufor z dołu, lista znów jest naturalna
                       padding: const EdgeInsets.all(16),
                       itemCount: expenses.length,
                       itemBuilder: (context, index) {
@@ -432,9 +484,9 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                 ),
               ),
               
-              // NOWY, PANCERNY PANEL KONTROLNY NA SAMYM DOLE (Tylko jeśli grupa jest otwarta)
+              // ZMIENIONE: Wywołujemy widok z parametrem isAdmin
               if (isClosed)
-                _buildSettlementResults(settlementData)
+                _buildSettlementResults(settlementData, isAdmin)
               else
                 Container(
                   padding: const EdgeInsets.all(24),
@@ -456,7 +508,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                                 icon: const Icon(Icons.person_add, color: Colors.white, size: 20),
                                 label: const Text('Add Person', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color.fromARGB(255, 19, 45, 105), // Twój elegancki granat
+                                  backgroundColor: const Color.fromARGB(255, 19, 45, 105),
                                   padding: const EdgeInsets.symmetric(vertical: 14),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 ),
@@ -469,7 +521,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                                 icon: const Icon(Icons.add, color: Colors.white, size: 20),
                                 label: const Text('Add Expense', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: _primaryColor, // Nasz klasyczny zielony
+                                  backgroundColor: _primaryColor, 
                                   padding: const EdgeInsets.symmetric(vertical: 14),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 ),
@@ -482,7 +534,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                           ElevatedButton(
                             onPressed: _isSettling ? null : _settleGroup,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color.fromARGB(255, 205, 3, 77),
+                              backgroundColor: const Color.fromARGB(255, 205, 3, 77), // Twój malinowy kolor!
                               minimumSize: const Size(double.infinity, 56),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             ),
@@ -499,7 +551,6 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
           );
         },
       ),
-      // Całkowicie wyczyściliśmy właściwości 'floatingActionButton' – brak lewitujących elementów!
     );
   }
 }
