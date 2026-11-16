@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/group_service.dart';
-import '../services/auth_service.dart'; // Podpięty serwis do tłumaczenia imion
+import '../services/auth_service.dart'; 
 
 class GroupDashboardScreen extends StatefulWidget {
   final String groupId;
@@ -20,7 +20,7 @@ class GroupDashboardScreen extends StatefulWidget {
 class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GroupService _groupService = GroupService();
-  final AuthService _authService = AuthService(); // Inicjalizacja serwisu
+  final AuthService _authService = AuthService(); 
   final Color _primaryColor = const Color(0xFF10B981);
 
   final TextEditingController _amountController = TextEditingController();
@@ -37,7 +37,6 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
     super.dispose();
   }
 
-  // --- LOGIKA DODAWANIA WIRTUALNEGO ZNAJOMEGO ---
   Future<void> _addGhostUser() async {
     final name = _personNameController.text.trim();
     if (name.isEmpty) return;
@@ -102,9 +101,93 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
       ),
     );
   }
-  // ----------------------------------------------
 
-  Future<void> _addExpense() async {
+  Future<void> _showAddExpenseDialog(List<dynamic> memberIds) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    Map<String, String> membersMap = {};
+    for (String id in memberIds) {
+      if (id == widget.currentUserId) {
+        membersMap[id] = 'You';
+      } else {
+        membersMap[id] = await _authService.getUserName(id);
+      }
+    }
+
+    if (mounted) Navigator.pop(context); 
+
+    String selectedPayerId = widget.currentUserId; 
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('Add New Expense'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'What for? (e.g., Pizza, Taxi)',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _amountController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Amount (£)',
+                    prefixIcon: Icon(Icons.currency_pound),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(
+                    labelText: 'Who paid?',
+                    prefixIcon: Icon(Icons.person),
+                  ),
+                  value: selectedPayerId,
+                  isExpanded: true,
+                  items: membersMap.entries.map((entry) {
+                    return DropdownMenuItem<String>(
+                      value: entry.key,
+                      child: Text(entry.value, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    );
+                  }).toList(),
+                  onChanged: (String? newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        selectedPayerId = newValue;
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: _primaryColor),
+                onPressed: () => _addExpense(selectedPayerId),
+                child: const Text('Add', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _addExpense(String payerId) async {
     final amountText = _amountController.text.trim();
     final title = _titleController.text.trim();
 
@@ -121,7 +204,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
           .add({
         'title': title,
         'amount': amount,
-        'paidBy': widget.currentUserId,
+        'paidBy': payerId, 
         'timestamp': FieldValue.serverTimestamp(),
       });
 
@@ -157,46 +240,6 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
     }
   }
 
-  void _showAddExpenseDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add New Expense'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _titleController,
-              decoration: const InputDecoration(
-                labelText: 'What for? (e.g., Pizza, Taxi)',
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Amount (£)',
-                prefixIcon: Icon(Icons.currency_pound),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _primaryColor),
-            onPressed: _addExpense,
-            child: const Text('Add', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSettlementResults(List<dynamic> settlement) {
     if (settlement.isEmpty) {
       return const Padding(
@@ -229,7 +272,6 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
             final String fromId = s['fromUserId'];
             final String toId = s['toUserId'];
 
-            // Funkcja pomocnicza tłumacząca ID na Imię
             Future<String> resolveName(String id) async {
               if (id == widget.currentUserId) return 'You';
               return await _authService.getUserName(id);
@@ -287,40 +329,20 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
         backgroundColor: _primaryColor,
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
-        actions: [
-          StreamBuilder<DocumentSnapshot>(
-            stream: _firestore.collection('groups').doc(widget.groupId).snapshots(),
-            builder: (context, snapshot) {
-              final isClosed = snapshot.data?.get('status') == 'closed';
-              if (isClosed) return const SizedBox.shrink();
-              
-              return IconButton(
-                icon: const Icon(Icons.person_add_alt_1),
-                tooltip: 'Add Person',
-                onPressed: _showAddPersonDialog,
-              );
-            },
-          ),
-        ],
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: _firestore.collection('groups').doc(widget.groupId).snapshots(),
         builder: (context, groupSnapshot) {
-          if (groupSnapshot.hasError) {
-            return const Center(child: Text('Error loading group data.'));
-          }
-          if (groupSnapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator(color: _primaryColor));
-          }
+          if (groupSnapshot.hasError) return const Center(child: Text('Error loading group data.'));
+          if (groupSnapshot.connectionState == ConnectionState.waiting) return Center(child: CircularProgressIndicator(color: _primaryColor));
 
           final groupData = groupSnapshot.data?.data() as Map<String, dynamic>?;
-          if (groupData == null) {
-            return const Center(child: Text('Group not found.'));
-          }
+          if (groupData == null) return const Center(child: Text('Group not found.'));
 
           final bool isClosed = groupData['status'] == 'closed';
           final bool isAdmin = groupData['adminId'] == widget.currentUserId;
           final List<dynamic> settlementData = groupData['settlement'] ?? [];
+          final List<dynamic> members = groupData['members'] as List<dynamic>? ?? [];
 
           return Column(
             children: [
@@ -330,32 +352,20 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [
-                    const Text(
-                      'Group PIN',
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
-                    ),
+                    const Text('Group PIN', style: TextStyle(color: Colors.white70, fontSize: 14)),
                     const SizedBox(height: 8),
                     Text(
                       groupData['pin'] ?? 'ERROR',
                       style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 40,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 8,
+                        color: Colors.white, fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: 8,
                       ),
                     ),
                     if (isClosed)
                       Container(
                         margin: const EdgeInsets.only(top: 16),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text(
-                          'SETTLED & CLOSED',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
+                        decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(12)),
+                        child: const Text('SETTLED & CLOSED', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                       ),
                   ],
                 ),
@@ -369,57 +379,50 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                       .orderBy('timestamp', descending: true)
                       .snapshots(),
                   builder: (context, expenseSnapshot) {
-                    if (expenseSnapshot.hasError) {
-                      return const Center(child: Text('Error loading expenses.'));
-                    }
-                    if (expenseSnapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+                    if (expenseSnapshot.hasError) return const Center(child: Text('Error loading expenses.'));
+                    if (expenseSnapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
 
                     final expenses = expenseSnapshot.data?.docs ?? [];
-
                     if (expenses.isEmpty) {
                       return const Center(
-                        child: Text(
-                          'No expenses yet. Add the first one!',
-                          style: TextStyle(color: Colors.grey, fontSize: 16),
-                        ),
+                        child: Text('No expenses yet. Add the first one!', style: TextStyle(color: Colors.grey, fontSize: 16)),
                       );
                     }
 
                     return ListView.builder(
+                      // Usunąłem sztuczny bufor z dołu, lista znów jest naturalna
                       padding: const EdgeInsets.all(16),
                       itemCount: expenses.length,
                       itemBuilder: (context, index) {
                         final expData = expenses[index].data() as Map<String, dynamic>;
                         final amount = expData['amount'] ?? 0.0;
                         final title = expData['title'] ?? 'Unknown';
-                        final paidBy = expData['paidBy'] == widget.currentUserId 
-                            ? 'You' 
-                            : 'Someone'; // Tutaj też będziemy podmieniać w przyszłości
+                        final String paidById = expData['paidBy'] ?? widget.currentUserId;
 
                         return Card(
                           margin: const EdgeInsets.only(bottom: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           child: ListTile(
                             contentPadding: const EdgeInsets.all(16),
                             leading: CircleAvatar(
                               backgroundColor: _primaryColor.withValues(alpha: 0.1),
                               child: Icon(Icons.receipt_long, color: _primaryColor),
                             ),
-                            title: Text(
-                              title,
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            
+                            subtitle: FutureBuilder<String>(
+                              future: paidById == widget.currentUserId 
+                                  ? Future.value('You') 
+                                  : _authService.getUserName(paidById),
+                              builder: (context, snapshot) {
+                                final name = snapshot.data ?? '...';
+                                return Text('Paid by: $name');
+                              },
                             ),
-                            subtitle: Text('Paid by: $paidBy'),
+                            
                             trailing: Text(
                               '£${amount.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                             ),
                           ),
                         );
@@ -428,56 +431,75 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                   },
                 ),
               ),
+              
+              // NOWY, PANCERNY PANEL KONTROLNY NA SAMYM DOLE (Tylko jeśli grupa jest otwarta)
               if (isClosed)
                 _buildSettlementResults(settlementData)
-              else if (isAdmin)
+              else
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, -5),
-                      )
+                      BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))
                     ],
                   ),
-                  child: ElevatedButton(
-                    onPressed: _isSettling ? null : _settleGroup,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F172A),
-                      minimumSize: const Size(double.infinity, 56),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child: _isSettling
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                            'Settle Up Group',
-                            style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold),
+                  child: SafeArea(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: _showAddPersonDialog,
+                                icon: const Icon(Icons.person_add, color: Colors.white, size: 20),
+                                label: const Text('Add Person', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color.fromARGB(255, 19, 45, 105), // Twój elegancki granat
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () => _showAddExpenseDialog(members),
+                                icon: const Icon(Icons.add, color: Colors.white, size: 20),
+                                label: const Text('Add Expense', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _primaryColor, // Nasz klasyczny zielony
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (isAdmin) ...[
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: _isSettling ? null : _settleGroup,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color.fromARGB(255, 205, 3, 77),
+                              minimumSize: const Size(double.infinity, 56),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                            child: _isSettling
+                                ? const CircularProgressIndicator(color: Colors.white)
+                                : const Text('Settle Up Group', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
                           ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
             ],
           );
         },
       ),
-      floatingActionButton: StreamBuilder<DocumentSnapshot>(
-        stream: _firestore.collection('groups').doc(widget.groupId).snapshots(),
-        builder: (context, snapshot) {
-          final isClosed = snapshot.data?.get('status') == 'closed';
-          if (isClosed) return const SizedBox.shrink();
-          
-          return FloatingActionButton.extended(
-            onPressed: _showAddExpenseDialog,
-            backgroundColor: _primaryColor,
-            icon: const Icon(Icons.add, color: Colors.white),
-            label: const Text('Add Expense', style: TextStyle(color: Colors.white)),
-          );
-        },
-      ),
+      // Całkowicie wyczyściliśmy właściwości 'floatingActionButton' – brak lewitujących elementów!
     );
   }
 }
