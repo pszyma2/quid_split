@@ -67,7 +67,7 @@ class AuthService {
     return querySnapshot.docs.first.data();
   }
 
-  // --- 5. PRZYWRACANIE KONTA (NOWA FUNKCJA) ---
+  // --- 5. PRZYWRACANIE KONTA (NAPRAWIONE ADMIN ID) ---
   Future<void> restoreAccount(String recoveryKey) async {
     final oldUserData = await findUserByRecoveryKey(recoveryKey);
     if (oldUserData == null) {
@@ -96,18 +96,28 @@ class AuthService {
     if (groupsSnapshot.docs.isNotEmpty) {
       WriteBatch batch = _firestore.batch();
       for (var doc in groupsSnapshot.docs) {
-        List<dynamic> members = doc.data()['members'] ?? [];
+        final data = doc.data();
+        List<dynamic> members = data['members'] ?? [];
         members.remove(oldUid);
         if (!members.contains(newUid)) {
           members.add(newUid);
         }
-        batch.update(doc.reference, {'members': members});
+        
+        Map<String, dynamic> updates = {'members': members};
+        
+        // NAPRAWA ADMINA: Jeśli stare ID było adminem, zrób adminem nowe ID
+        if (data['adminId'] == oldUid) {
+          updates['adminId'] = newUid;
+        }
+
+        batch.update(doc.reference, updates);
       }
       await batch.commit();
     }
 
     await _firestore.collection('users').doc(oldUid).delete();
   }
+
   // --- 6. POBIERANIE IMIENIA UŻYTKOWNIKA ---
   Future<String> getUserName(String uid) async {
     try {
@@ -119,5 +129,25 @@ class AuthService {
       print("Error fetching user name: $e");
     }
     return 'Unknown';
+  }
+
+  // --- 7. WYLOGOWANIE UŻYTKOWNIKA (DODANE) ---
+  Future<void> signOut() async {
+    await _auth.signOut();
+  }
+
+  // --- 8. USUWANIE KONTA (DODANE) ---
+  Future<void> deleteAccount() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      try {
+        // Usuwamy dane z Firestore
+        await _firestore.collection('users').doc(user.uid).delete();
+        // Usuwamy konto anonimowe z Firebase Auth
+        await user.delete();
+      } catch (e) {
+        throw Exception('Failed to delete account: $e');
+      }
+    }
   }
 }

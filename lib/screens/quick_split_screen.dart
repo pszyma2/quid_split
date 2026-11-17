@@ -140,7 +140,7 @@ class _QuickSplitScreenState extends State<QuickSplitScreen> {
                           hintStyle: TextStyle(
                             fontSize: 48,
                             fontWeight: FontWeight.w900,
-                            color: const Color(0xFFF59E0B).withValues(alpha: 0.3), 
+                            color: const Color.fromARGB(255, 155, 99, 2).withValues(alpha: 0.3), 
                           ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -188,7 +188,7 @@ class _QuickSplitScreenState extends State<QuickSplitScreen> {
                     child: ElevatedButton(
                       onPressed: _proceedToParticipants,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF59E0B), 
+                        backgroundColor: const Color(0xFFF59E0B),
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(

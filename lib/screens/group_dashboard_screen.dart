@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:qr_flutter/qr_flutter.dart'; 
 import '../services/group_service.dart';
 import '../services/auth_service.dart'; 
 
@@ -120,7 +121,13 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 
     if (mounted) Navigator.pop(context); 
 
-    String selectedPayerId = widget.currentUserId; 
+    // ZMIANA BŁĘDU: Kuloodporne sprawdzenie dla Dropdownu
+    String? selectedPayerId;
+    if (membersMap.containsKey(widget.currentUserId)) {
+      selectedPayerId = widget.currentUserId;
+    } else if (membersMap.isNotEmpty) {
+      selectedPayerId = membersMap.keys.first;
+    }
 
     if (mounted) {
       showDialog(
@@ -177,7 +184,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: _primaryColor),
-                onPressed: () => _addExpense(selectedPayerId),
+                onPressed: () => _addExpense(selectedPayerId ?? widget.currentUserId),
                 child: const Text('Add', style: TextStyle(color: Colors.white)),
               ),
             ],
@@ -220,7 +227,6 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
     }
   }
 
-  // NOWA FUNKCJA: Edycja i usuwanie wydatku
   Future<void> _showEditExpenseDialog(
     String expenseId,
     String currentTitle,
@@ -247,7 +253,14 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 
     final TextEditingController editTitleController = TextEditingController(text: currentTitle);
     final TextEditingController editAmountController = TextEditingController(text: currentAmount.toString());
-    String selectedPayerId = currentPaidBy;
+    
+    // ZMIANA BŁĘDU: Kuloodporne sprawdzenie dla edycji
+    String? selectedPayerId;
+    if (membersMap.containsKey(currentPaidBy)) {
+      selectedPayerId = currentPaidBy;
+    } else if (membersMap.isNotEmpty) {
+      selectedPayerId = membersMap.keys.first;
+    }
 
     if (mounted) {
       showDialog(
@@ -277,7 +290,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                     labelText: 'Who paid?',
                     prefixIcon: Icon(Icons.person),
                   ),
-                  value: membersMap.containsKey(selectedPayerId) ? selectedPayerId : widget.currentUserId,
+                  value: selectedPayerId,
                   isExpanded: true,
                   items: membersMap.entries.map((entry) {
                     return DropdownMenuItem<String>(
@@ -334,7 +347,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                   final title = editTitleController.text.trim();
                   final amount = double.tryParse(editAmountController.text.trim());
 
-                  if (title.isEmpty || amount == null || amount <= 0) return;
+                  if (title.isEmpty || amount == null || amount <= 0 || selectedPayerId == null) return;
 
                   try {
                     await _firestore
@@ -388,6 +401,110 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSettling = false);
+    }
+  }
+
+  Future<void> _showPaymentQRCode(String creditorId, String creditorName, double amount) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final doc = await _firestore.collection('users').doc(creditorId).get();
+      if (mounted) Navigator.pop(context); 
+
+      if (!doc.exists) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$creditorName is a guest and doesn\'t have an account.')),
+          );
+        }
+        return;
+      }
+
+      final data = doc.data() as Map<String, dynamic>;
+      final sortCode = data['sortCode'] ?? '';
+      final accountNumber = data['accountNumber'] ?? '';
+
+      if (sortCode.isEmpty || accountNumber.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$creditorName hasn\'t added their bank details securely yet.')),
+          );
+        }
+        return;
+      }
+
+      final displaySortCode = '${sortCode.substring(0, 2)}-${sortCode.substring(2, 4)}-${sortCode.substring(4, 6)}';
+      final qrPayload = "paym://payment?name=${Uri.encodeComponent(creditorName)}&sc=$sortCode&acc=$accountNumber&amt=$amount";
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text(
+              'Pay $creditorName', 
+              textAlign: TextAlign.center, 
+              style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF0F172A))
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Scan with your banking app', style: TextStyle(color: Colors.grey)),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.shade300),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _primaryColor.withValues(alpha: 0.1),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: QrImageView(
+                    data: qrPayload,
+                    version: QrVersions.auto,
+                    size: 200.0,
+                    foregroundColor: const Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  '£${amount.toStringAsFixed(2)}', 
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: _primaryColor)
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'SC: $displaySortCode\nACC: $accountNumber', 
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1, color: Color(0xFF64748B)),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading details: $e')),
+        );
+      }
     }
   }
 
@@ -470,6 +587,12 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (!isPaid)
+                          IconButton(
+                            icon: Icon(Icons.qr_code_scanner, color: _primaryColor),
+                            tooltip: 'Pay via QR Code',
+                            onPressed: () => _showPaymentQRCode(toId, toName, amount),
+                          ),
                         Text(
                           '£${amount.toStringAsFixed(2)}',
                           style: TextStyle(
@@ -592,7 +715,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                       itemCount: expenses.length,
                       itemBuilder: (context, index) {
                         final expDoc = expenses[index];
-                        final expenseId = expDoc.id; // Pobieramy ID dokumentu wydatku
+                        final expenseId = expDoc.id; 
                         final expData = expDoc.data() as Map<String, dynamic>;
                         
                         final amount = expData['amount'] ?? 0.0;
@@ -603,9 +726,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                           margin: const EdgeInsets.only(bottom: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           child: ListTile(
-                            // ZMIANA: Dodany onTap wywołujący nową funkcję edycji
                             onTap: () {
-                              // Pozwalamy na edycję tylko jeśli grupa nie jest jeszcze zamknięta!
                               if (!isClosed) {
                                 _showEditExpenseDialog(
                                   expenseId,
@@ -633,7 +754,6 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                                   : _authService.getUserName(paidById),
                               builder: (context, snapshot) {
                                 final name = snapshot.data ?? '...';
-                                // Dodałem informację dla użytkownika, że może kliknąć by edytować
                                 return Text(!isClosed ? 'Paid by: $name (Tap to edit)' : 'Paid by: $name');
                               },
                             ),

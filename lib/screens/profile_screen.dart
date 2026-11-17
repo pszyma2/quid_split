@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'welcome_screen.dart'; // Potrzebne do powrotu po usunięciu konta
+import 'package:firebase_auth/firebase_auth.dart';
+import '../services/auth_service.dart';
+import 'welcome_screen.dart';
+import 'bank_details_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -12,101 +14,111 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final String? uid = FirebaseAuth.instance.currentUser?.uid;
+  final AuthService _authService = AuthService();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  String _userName = 'Loading...';
+  String _displayName = 'Loading...';
   String _recoveryKey = 'Loading...';
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
+    _loadProfileData();
   }
 
-  Future<void> _loadUserData() async {
-    if (uid == null) return;
-    final doc = await _firestore.collection('users').doc(uid).get();
-    if (doc.exists) {
-      setState(() {
-        _userName = doc.data()?['displayName'] ?? 'Unknown';
-        _recoveryKey = doc.data()?['recoveryKey'] ?? 'No key found';
-      });
+  Future<void> _loadProfileData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final doc = await _firestore.collection('users').doc(user.uid).get();
+        if (doc.exists) {
+          final data = doc.data() as Map<String, dynamic>;
+          setState(() {
+            // POPRAWKA: Pobieramy 'displayName' zamiast 'name'
+            _displayName = data['displayName'] ?? 'Unknown User';
+            _recoveryKey = data['recoveryKey'] ?? 'ERROR: Key not found';
+          });
+        } else {
+          // Baza wyczyszczona, ale telefon pamięta sesję
+          setState(() {
+            _displayName = 'Database Reset (Please Log Out)';
+            _recoveryKey = '---';
+          });
+        }
+      } catch (e) {
+        setState(() {
+          _displayName = 'Error loading profile';
+          _recoveryKey = 'N/A';
+        });
+      } finally {
+        // PANCERNE ROZWIĄZANIE: Zawsze wyłączamy kółko, niezależnie co się stało!
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
+    } else {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  // --- FAZA 1: ZWYKŁE PYTANIE ---
-  void _showDeleteWarningStep1() {
+  void _copyToClipboard(String text, String type) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$type copied to clipboard')),
+    );
+  }
+
+  Future<void> _handleLogout() async {
+    await _authService.signOut();
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+        (Route<dynamic> route) => false,
+      );
+    }
+  }
+
+  void _showDeleteAccountConfirmation() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Account?'),
-        content: const Text('Are you sure you want to delete your account?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context), // Anuluj -> nic się nie dzieje
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            onPressed: () {
-              Navigator.pop(context); // Zamykamy pierwsze okno
-              _showDeleteWarningStep2(); // Otwieramy drugą, ostateczną bramkę
-            },
-            child: const Text('Yes, proceed', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- FAZA 2: BRAMKA BEZ POWROTU ---
-  void _showDeleteWarningStep2() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('FINAL WARNING', style: TextStyle(color: Colors.red)),
         content: const Text(
-          'Confirming this will permanently delete your account. You will lose access to all your trips, debts, and history. This action CANNOT be undone.',
+          'This will permanently delete your user profile and remove you from all active trips. This action cannot be undone.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context), // Anuluj -> uratowany
+            onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: _deleteAccountAndExit, // EGZEKUCJA
-            child: const Text('PERMANENTLY DELETE', style: TextStyle(color: Colors.white)),
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await _authService.deleteAccount();
+                if (mounted) {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+                    (Route<dynamic> route) => false,
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete Permanently', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
-  }
-
-  Future<void> _deleteAccountAndExit() async {
-    if (uid == null) return;
-    try {
-      // 1. Kasujemy dokument profilu z bazy
-      await _firestore.collection('users').doc(uid).delete();
-      // 2. Kasujemy anonimowe konto systemowe Authentication
-      await FirebaseAuth.instance.currentUser?.delete();
-
-      if (mounted) {
-        // Czyścimy całą historię nawigacji i wyrzucamy na ekran powitalny
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-          (route) => false,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    }
   }
 
   @override
@@ -114,113 +126,151 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
-        elevation: 0,
-        title: const Text('Profile & Settings', style: TextStyle(color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Display Name', style: TextStyle(color: Colors.grey, fontSize: 14)),
-            const SizedBox(height: 8),
-            Text(_userName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 32),
-            
-            const Text('Recovery Key', style: TextStyle(color: Colors.grey, fontSize: 14)),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _recoveryKey, 
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 1.2),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.copy, color: Color(0xFF10B981)),
-                    onPressed: () async { // <-- DODANE async
-                      // Czekamy, aż system fizycznie zapisze dane w schowku
-                      await Clipboard.setData(ClipboardData(text: _recoveryKey)); 
-                      
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Recovery Key copied to clipboard!'),
-                            behavior: SnackBarBehavior.floating, // Wygląda bardziej premium
-                            backgroundColor: Color(0xFF10B981), // Zielony akcent sukcesu
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Keep this key safe. You will need it to restore your account if you change your phone.',
-              style: TextStyle(color: Colors.grey, fontSize: 12),
-            ),
-            const Spacer(), // Wypycha przycisk usuwania na sam dół ekranu
-            
-            // --- NOWY PRZYCISK: BEZPIECZNE WYLOGOWANIE ---
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () async {
-                  await FirebaseAuth.instance.signOut(); 
-                  
-                  if (context.mounted) {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-                      (route) => false,
-                    );
-                  }
-                },
-                icon: const Icon(Icons.logout, color: Colors.black87), // Ciemna ikona na jasne tło
-                label: const Text('Log Out', style: TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.black26, width: 1.5), // Widoczna, szara ramka
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-              
-            const SizedBox(height: 16), // Odstęp między przyciskami
-              
-              // --- TWÓJ OBECNY CZERWONY PRZYCISK USUWANIA KONTA ---
-              // (Zostaje bez zmian poniżej)
-
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _showDeleteWarningStep1,
-                icon: const Icon(Icons.warning_amber_rounded, color: Colors.red),
-                label: const Text('Delete Account', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  side: const BorderSide(color: Colors.red),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
+        title: const Text(
+          'Profile & Settings',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
+        backgroundColor: const Color(0xFF0F172A),
+        iconTheme: const IconThemeData(color: Colors.white),
+        elevation: 0,
       ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Sekcja Danych Osobowych
+                    const Text(
+                      'Display Name',
+                      style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Text(
+                        _displayName,
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Recovery Key',
+                      style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _recoveryKey,
+                              style: const TextStyle(fontSize: 16, letterSpacing: 2, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.copy, color: Color(0xFF10B981)),
+                            onPressed: () => _copyToClipboard(_recoveryKey, 'Recovery Key'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        'Keep this key safe. You will need it to restore your account if you change your phone.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 48),
+
+                    // NOWY PRZYCISK: KIERUJE DO USTAWIEN BANKOWYCH
+                    InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const BankDetailsScreen()),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.account_balance, color: Color(0xFF10B981), size: 28),
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Bank Details',
+                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                  ),
+                                  Text(
+                                    'Manage account for receiving money',
+                                    style: TextStyle(fontSize: 13, color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(Icons.chevron_right, color: Colors.grey),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 48),
+
+                    // Sekcja Zarządzania Kontem
+                    OutlinedButton.icon(
+                      onPressed: _handleLogout,
+                      icon: const Icon(Icons.logout, color: Colors.black87),
+                      label: const Text('Log Out', style: TextStyle(color: Colors.black87)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextButton.icon(
+                      onPressed: _showDeleteAccountConfirmation,
+                      icon: const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                      label: const Text('Delete Account', style: TextStyle(color: Colors.red)),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 }

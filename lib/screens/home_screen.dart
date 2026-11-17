@@ -4,6 +4,7 @@ import 'quick_split_screen.dart';
 import 'friend_transfer_screen.dart';
 import 'group_gateway_screen.dart';
 import 'profile_screen.dart';
+import 'my_groups_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -104,7 +105,7 @@ class HomeScreen extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => GroupGatewayScreen(currentUserId: _safeUserId),
+                      builder: (context) => const MyGroupsScreen(),
                     ),
                   );
                 },

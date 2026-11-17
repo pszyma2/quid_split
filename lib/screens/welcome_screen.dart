@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import 'home_screen.dart';
+import 'app_lock_screen.dart'; // <-- ZMIENIONY IMPORT NA EKRAN BLOKADY
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -33,7 +33,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          // <-- ZMIANA: Kierujemy na ekran blokady zamiast bezpośrednio do Home
+          MaterialPageRoute(builder: (context) => const AppLockScreen()), 
         );
       }
     } catch (e) {
@@ -60,7 +61,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          // <-- ZMIANA: Kierujemy na ekran blokady zamiast bezpośrednio do Home
+          MaterialPageRoute(builder: (context) => const AppLockScreen()), 
         );
       }
     } catch (e) {
