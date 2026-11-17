@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // DODANY IMPORT
 import '../services/group_service.dart';
 import 'group_dashboard_screen.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  final String? currentUserId; 
-  
-  const HomeScreen({
-    super.key, 
-    this.currentUserId, 
-  });
+  // Usunęliśmy przekazywanie ID przez parametr - kokpit sam je sobie weźmie
+  const HomeScreen({super.key}); 
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -25,7 +23,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _groupNameController = TextEditingController();
   final TextEditingController _pinController = TextEditingController();
 
-  String get _safeUserId => widget.currentUserId ?? 'mock_user_id';
+  // PANCERNY CHWYT: Zawsze bierzemy prawdziwe ID z sesji Firebase. Koniec z 'mock_user_id'!
+  String get _safeUserId => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   @override
   void dispose() {
@@ -148,6 +147,45 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showDeleteGroupConfirmation(String groupId, String groupName) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete "$groupName"?'),
+        content: const Text(
+          'This will permanently delete this closed trip and all its expenses from the archive. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await _firestore.collection('groups').doc(groupId).delete();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Trip deleted from archive.')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error deleting trip: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildGroupList(bool isClosed) {
     return StreamBuilder<QuerySnapshot>(
       stream: _firestore
@@ -225,7 +263,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   )
                 ),
                 subtitle: Text('PIN: $pin', style: const TextStyle(fontWeight: FontWeight.w600)),
-                trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                trailing: isClosed 
+                  ? IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                      onPressed: () {
+                        _showDeleteGroupConfirmation(group.id, groupName);
+                      },
+                    )
+                  : const Icon(Icons.chevron_right, color: Colors.grey),
                 onTap: () {
                   Navigator.push(
                     context,
@@ -258,6 +303,17 @@ class _HomeScreenState extends State<HomeScreen> {
             'QuidSplit', 
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1.5)
           ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.person_outline, color: Colors.white),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                );
+              },
+            )
+          ],
           bottom: const TabBar(
             indicatorColor: Color(0xFF10B981),
             indicatorWeight: 3,
@@ -271,7 +327,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         body: Column(
           children: [
-            // Pływająca lista wyjazdów
             Expanded(
               child: TabBarView(
                 children: [
@@ -280,8 +335,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            
-            // NOWY PANCERNY PANEL KONTROLNY NA SAMYM DOLE (Styl taki sam jak w kokpicie grupy)
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
