@@ -39,22 +39,18 @@ class _QuickSplitScreenState extends State<QuickSplitScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
+      // ZMIENIONE: Dodany solidny, pomarańczowy górny panel (AppBar)
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A)),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: const Text(
           'Quick Split',
           style: TextStyle(
-            color: Color(0xFF0F172A),
             fontWeight: FontWeight.bold,
-            fontSize: 20,
+            color: Colors.white,
           ),
         ),
+        backgroundColor: const Color(0xFFF59E0B), // Nasz nowy pomarańczowy
+        iconTheme: const IconThemeData(color: Colors.white),
+        elevation: 0,
         centerTitle: true,
       ),
       body: SafeArea(
@@ -68,12 +64,13 @@ class _QuickSplitScreenState extends State<QuickSplitScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ZMIENIONE: Pytanie jest teraz większe, grubsze i ciemniejsze
                       const Text(
                         'What are we splitting?',
                         style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF64748B),
+                          fontSize: 20, // Powiększone z 16
+                          fontWeight: FontWeight.w800, // Pogrubione z w600
+                          color: Color(0xFF0F172A), // Ciemniejszy, mocny kolor
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -129,7 +126,7 @@ class _QuickSplitScreenState extends State<QuickSplitScreen> {
                         style: const TextStyle(
                           fontSize: 48,
                           fontWeight: FontWeight.w900,
-                          color: Color(0xFF10B981),
+                          color: Color(0xFFF59E0B), 
                           letterSpacing: -1.5,
                         ),
                         decoration: InputDecoration(
@@ -137,13 +134,13 @@ class _QuickSplitScreenState extends State<QuickSplitScreen> {
                           prefixStyle: const TextStyle(
                             fontSize: 48,
                             fontWeight: FontWeight.w900,
-                            color: Color(0xFF10B981),
+                            color: Color(0xFFF59E0B), 
                           ),
                           hintText: '0.00',
                           hintStyle: TextStyle(
                             fontSize: 48,
                             fontWeight: FontWeight.w900,
-                            color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                            color: const Color(0xFFF59E0B).withValues(alpha: 0.3), 
                           ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -191,7 +188,7 @@ class _QuickSplitScreenState extends State<QuickSplitScreen> {
                     child: ElevatedButton(
                       onPressed: _proceedToParticipants,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
+                        backgroundColor: const Color(0xFFF59E0B), 
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(

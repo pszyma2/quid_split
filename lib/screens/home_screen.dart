@@ -1,381 +1,194 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // DODANY IMPORT
-import '../services/group_service.dart';
-import 'group_dashboard_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'quick_split_screen.dart';
+import 'friend_transfer_screen.dart';
+import 'group_gateway_screen.dart';
 import 'profile_screen.dart';
 
-class HomeScreen extends StatefulWidget {
-  // Usunęliśmy przekazywanie ID przez parametr - kokpit sam je sobie weźmie
-  const HomeScreen({super.key}); 
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
 
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final GroupService _groupService = GroupService();
-  
-  final Color _primaryColor = const Color(0xFF10B981);
-  final Color _darkColor = const Color(0xFF0F172A);
-
-  final TextEditingController _groupNameController = TextEditingController();
-  final TextEditingController _pinController = TextEditingController();
-
-  // PANCERNY CHWYT: Zawsze bierzemy prawdziwe ID z sesji Firebase. Koniec z 'mock_user_id'!
   String get _safeUserId => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   @override
-  void dispose() {
-    _groupNameController.dispose();
-    _pinController.dispose();
-    super.dispose();
-  }
-
-  void _showCreateGroupDialog() {
-    _groupNameController.clear();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Start New Trip'),
-        content: TextField(
-          controller: _groupNameController,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Trip Name (e.g. Kraków, Pub)',
-            prefixIcon: Icon(Icons.flight_takeoff),
-          ),
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: const Color.fromARGB(255, 19, 40, 88),
+        elevation: 0,
+        title: const Text(
+          'QuidSplit', 
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1.5)
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _primaryColor),
-            onPressed: () async {
-              final name = _groupNameController.text.trim();
-              if (name.isEmpty) return;
+          IconButton(
+            icon: const Icon(Icons.person_outline, color: Colors.white),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfileScreen()),
+              );
+            },
+          )
+        ],
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'What do you need to do?',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Choose how you want to split or transfer money today.',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 32),
 
-              try {
-                final groupId = await _groupService.createGroup(name, _safeUserId);
-                if (mounted) {
-                  Navigator.pop(context);
+              // Opcja 1: Quick Split (Teraz Pomarańczowy)
+              _buildFeatureCard(
+                context: context,
+                title: 'Quick Split',
+                subtitle: 'Split a one-off bill (e.g. dinner, pub round) on the spot.',
+                icon: Icons.receipt_long,
+                color: const Color(0xFFF59E0B), // Zmieniono na pomarańczowy
+                onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (context) => GroupDashboardScreen(
-                        groupId: groupId,
-                        currentUserId: _safeUserId,
-                      ),
-                    ),
+                    MaterialPageRoute(builder: (context) => const QuickSplitScreen()),
                   );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e')),
-                  );
-                }
-              }
-            },
-            child: const Text('Create', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
+                },
+              ),
+              
+              const SizedBox(height: 16),
 
-  void _showJoinGroupDialog() {
-    _pinController.clear();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Join Trip'),
-        content: TextField(
-          controller: _pinController,
-          textCapitalization: TextCapitalization.characters,
-          maxLength: 6,
-          decoration: const InputDecoration(
-            labelText: 'Enter 6-digit PIN',
-            prefixIcon: Icon(Icons.vpn_key),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _darkColor),
-            onPressed: () async {
-              final pin = _pinController.text.trim().toUpperCase();
-              if (pin.length != 6) return;
-
-              try {
-                final groupId = await _groupService.joinGroupWithPin(pin, _safeUserId);
-                if (mounted) {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => GroupDashboardScreen(
-                        groupId: groupId,
-                        currentUserId: _safeUserId,
-                      ),
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(e.toString().replaceAll('Exception: ', '')),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('Join', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showDeleteGroupConfirmation(String groupId, String groupName) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Delete "$groupName"?'),
-        content: const Text(
-          'This will permanently delete this closed trip and all its expenses from the archive. This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              Navigator.pop(context);
-              try {
-                await _firestore.collection('groups').doc(groupId).delete();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Trip deleted from archive.')),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error deleting trip: $e')),
-                  );
-                }
-              }
-            },
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGroupList(bool isClosed) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('groups')
-          .where('members', arrayContains: _safeUserId)
-          .where('status', isEqualTo: isClosed ? 'closed' : 'open')
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return const Center(child: Text('Error loading groups'));
-        }
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator(color: _primaryColor));
-        }
-
-        final groups = snapshot.data?.docs.toList() ?? [];
-        groups.sort((a, b) {
-          final aData = a.data() as Map<String, dynamic>;
-          final bData = b.data() as Map<String, dynamic>;
-          final aTime = aData['createdAt'] as Timestamp?;
-          final bTime = bData['createdAt'] as Timestamp?;
-          if (aTime == null || bTime == null) return 0;
-          return bTime.compareTo(aTime); 
-        });
-
-        if (groups.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  isClosed ? Icons.inventory_2_outlined : Icons.flight_takeoff, 
-                  size: 64, 
-                  color: Colors.grey.shade300
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  isClosed ? 'Archive is empty.' : 'No active trips.',
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 16),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16), 
-          itemCount: groups.length,
-          itemBuilder: (context, index) {
-            final group = groups[index];
-            final data = group.data() as Map<String, dynamic>;
-            final groupName = data['name'] ?? 'Unknown Trip';
-            final pin = data['pin'] ?? '---';
-
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              elevation: 0,
-              color: Colors.white,
-              child: ListTile(
-                contentPadding: const EdgeInsets.all(16),
-                leading: CircleAvatar(
-                  backgroundColor: isClosed ? Colors.grey.shade100 : _primaryColor.withValues(alpha: 0.1),
-                  child: Icon(
-                    isClosed ? Icons.inventory_2 : Icons.local_fire_department,
-                    color: isClosed ? Colors.grey : _primaryColor,
-                  ),
-                ),
-                title: Text(
-                  groupName, 
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold, 
-                    fontSize: 18,
-                    color: isClosed ? Colors.grey.shade600 : Colors.black,
-                  )
-                ),
-                subtitle: Text('PIN: $pin', style: const TextStyle(fontWeight: FontWeight.w600)),
-                trailing: isClosed 
-                  ? IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                      onPressed: () {
-                        _showDeleteGroupConfirmation(group.id, groupName);
-                      },
-                    )
-                  : const Icon(Icons.chevron_right, color: Colors.grey),
+              // Opcja 2: Friend Transfer (Zostaje Fioletowy)
+              _buildFeatureCard(
+                context: context,
+                title: 'Free Bank Transfer',
+                subtitle: 'Generate a QR code for a direct transfer up to £20.',
+                icon: Icons.qr_code_scanner,
+                color: const Color(0xFF8B5CF6), 
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => GroupDashboardScreen(
-                        groupId: group.id,
-                        currentUserId: _safeUserId,
-                      ),
+                      builder: (context) => FriendTransferScreen(currentUserId: _safeUserId),
                     ),
                   );
                 },
               ),
-            );
-          },
-        );
-      },
-    );
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        appBar: AppBar(
-          backgroundColor: _darkColor,
-          elevation: 0,
-          title: const Text(
-            'QuidSplit', 
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1.5)
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.person_outline, color: Colors.white),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ProfileScreen()),
-                );
-              },
-            )
-          ],
-          bottom: const TabBar(
-            indicatorColor: Color(0xFF10B981),
-            indicatorWeight: 3,
-            labelColor: Color(0xFF10B981),
-            unselectedLabelColor: Colors.white54,
-            tabs: [
-              Tab(icon: Icon(Icons.local_fire_department), text: 'Active'),
-              Tab(icon: Icon(Icons.inventory_2), text: 'Archive'),
+              const SizedBox(height: 16),
+
+              // Opcja 3: Group Trips (Teraz Zielony)
+              _buildFeatureCard(
+                context: context,
+                title: 'Group Trips',
+                subtitle: 'Create or join a group for ongoing trip expenses.',
+                icon: Icons.flight_takeoff,
+                color: const Color(0xFF10B981), // Zmieniono na zielony
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => GroupGatewayScreen(currentUserId: _safeUserId),
+                    ),
+                  );
+                },
+              ),
             ],
           ),
         ),
-        body: Column(
-          children: [
-            Expanded(
-              child: TabBarView(
-                children: [
-                  _buildGroupList(false), 
-                  _buildGroupList(true),  
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))
-                ],
-              ),
-              child: SafeArea(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _showCreateGroupDialog,
-                        icon: const Icon(Icons.flight_takeoff, color: Colors.white, size: 20),
-                        label: const Text('New Trip', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _primaryColor, 
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _showJoinGroupDialog,
-                        icon: const Icon(Icons.vpn_key, color: Colors.white, size: 20),
-                        label: const Text('Join PIN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _darkColor, 
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                  ],
+      ),
+    );
+  }
+
+  // ZMIENIONE: Funkcja budująca kafelki z cieniem i kolorowym tłem
+  Widget _buildFeatureCard({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        // Lekkie zabarwienie tła w kolorze przypisanym do opcji zamiast czystej bieli
+        color: color.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(20),
+        // Subtelna obwódka jak w rozliczeniach (Group Dashboard)
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 1.5),
+        boxShadow: [
+          // Miękki cień pod spodem, leciutko wpadający w kolor kafelka
+          BoxShadow(
+            color: color.withValues(alpha: 0.15),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(icon, color: color, size: 32),
                 ),
-              ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF64748B),
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Strzałka w kolorze przypisanym do przycisku
+                Icon(Icons.chevron_right, color: color.withValues(alpha: 0.7)),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

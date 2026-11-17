@@ -220,6 +220,157 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
     }
   }
 
+  // NOWA FUNKCJA: Edycja i usuwanie wydatku
+  Future<void> _showEditExpenseDialog(
+    String expenseId,
+    String currentTitle,
+    double currentAmount,
+    String currentPaidBy,
+    List<dynamic> memberIds,
+  ) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    Map<String, String> membersMap = {};
+    for (String id in memberIds) {
+      if (id == widget.currentUserId) {
+        membersMap[id] = 'You';
+      } else {
+        membersMap[id] = await _authService.getUserName(id);
+      }
+    }
+
+    if (mounted) Navigator.pop(context);
+
+    final TextEditingController editTitleController = TextEditingController(text: currentTitle);
+    final TextEditingController editAmountController = TextEditingController(text: currentAmount.toString());
+    String selectedPayerId = currentPaidBy;
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('Edit / Delete Expense'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: editTitleController,
+                  decoration: const InputDecoration(labelText: 'What for?'),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: editAmountController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Amount (£)',
+                    prefixIcon: Icon(Icons.currency_pound),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(
+                    labelText: 'Who paid?',
+                    prefixIcon: Icon(Icons.person),
+                  ),
+                  value: membersMap.containsKey(selectedPayerId) ? selectedPayerId : widget.currentUserId,
+                  isExpanded: true,
+                  items: membersMap.entries.map((entry) {
+                    return DropdownMenuItem<String>(
+                      value: entry.key,
+                      child: Text(entry.value, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    );
+                  }).toList(),
+                  onChanged: (String? newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        selectedPayerId = newValue;
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton.icon(
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                onPressed: () async {
+                  try {
+                    await _firestore
+                        .collection('groups')
+                        .doc(widget.groupId)
+                        .collection('expenses')
+                        .doc(expenseId)
+                        .delete();
+
+                    if (mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Expense deleted successfully')),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error deleting expense: $e')),
+                      );
+                    }
+                  }
+                },
+                icon: const Icon(Icons.delete, size: 18),
+                label: const Text('Delete'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: _primaryColor),
+                onPressed: () async {
+                  final title = editTitleController.text.trim();
+                  final amount = double.tryParse(editAmountController.text.trim());
+
+                  if (title.isEmpty || amount == null || amount <= 0) return;
+
+                  try {
+                    await _firestore
+                        .collection('groups')
+                        .doc(widget.groupId)
+                        .collection('expenses')
+                        .doc(expenseId)
+                        .update({
+                      'title': title,
+                      'amount': amount,
+                      'paidBy': selectedPayerId,
+                    });
+
+                    if (mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Expense updated successfully')),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error updating expense: $e')),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Save', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _settleGroup() async {
     setState(() => _isSettling = true);
     try {
@@ -240,7 +391,6 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
     }
   }
 
-  // ZMIENIONE: Przekazujemy parametr isAdmin, żeby tylko szef mógł odhaczać długi
   Widget _buildSettlementResults(List<dynamic> settlement, bool isAdmin) {
     if (settlement.isEmpty) {
       return const Padding(
@@ -273,7 +423,6 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
             final String fromId = s['fromUserId'];
             final String toId = s['toUserId'];
             
-            // Odczytujemy flagę, a jak jej nie ma (stare grupy), traktujemy jako nieopłacone (false)
             final bool isPaid = s['isPaid'] ?? false; 
 
             Future<String> resolveName(String id) async {
@@ -294,7 +443,6 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
-                  // Jak opłacone, to szare. Jak nieopłacone, to nasze zielone.
                   color: isPaid ? Colors.grey.shade50 : Colors.green.shade50,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -312,7 +460,6 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                       '$fromName must pay $toName', 
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        // Eleganckie przekreślenie rozliczonych długów
                         decoration: isPaid ? TextDecoration.lineThrough : null,
                         color: isPaid ? Colors.grey.shade600 : Colors.black,
                       )
@@ -321,7 +468,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                       ? Text('Settled', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.bold))
                       : null,
                     trailing: Row(
-                      mainAxisSize: MainAxisSize.min, // Żeby nie rozpychało na cały ekran
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           '£${amount.toStringAsFixed(2)}',
@@ -332,7 +479,6 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                             decoration: isPaid ? TextDecoration.lineThrough : null,
                           ),
                         ),
-                        // Pokazujemy Checkbox tylko Administratorowi!
                         if (isAdmin)
                           Checkbox(
                             value: isPaid,
@@ -341,7 +487,6 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                             onChanged: (bool? newValue) async {
                               if (newValue != null) {
                                 try {
-                                  // Wywołanie naszej nowej funkcji z backendu
                                   await _groupService.toggleDebtPaymentStatus(
                                     widget.groupId, 
                                     fromId, 
@@ -446,7 +591,10 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                       padding: const EdgeInsets.all(16),
                       itemCount: expenses.length,
                       itemBuilder: (context, index) {
-                        final expData = expenses[index].data() as Map<String, dynamic>;
+                        final expDoc = expenses[index];
+                        final expenseId = expDoc.id; // Pobieramy ID dokumentu wydatku
+                        final expData = expDoc.data() as Map<String, dynamic>;
+                        
                         final amount = expData['amount'] ?? 0.0;
                         final title = expData['title'] ?? 'Unknown';
                         final String paidById = expData['paidBy'] ?? widget.currentUserId;
@@ -455,6 +603,23 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                           margin: const EdgeInsets.only(bottom: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           child: ListTile(
+                            // ZMIANA: Dodany onTap wywołujący nową funkcję edycji
+                            onTap: () {
+                              // Pozwalamy na edycję tylko jeśli grupa nie jest jeszcze zamknięta!
+                              if (!isClosed) {
+                                _showEditExpenseDialog(
+                                  expenseId,
+                                  title,
+                                  amount,
+                                  paidById,
+                                  members,
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Cannot edit expenses in a settled group.')),
+                                );
+                              }
+                            },
                             contentPadding: const EdgeInsets.all(16),
                             leading: CircleAvatar(
                               backgroundColor: _primaryColor.withValues(alpha: 0.1),
@@ -468,7 +633,8 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                                   : _authService.getUserName(paidById),
                               builder: (context, snapshot) {
                                 final name = snapshot.data ?? '...';
-                                return Text('Paid by: $name');
+                                // Dodałem informację dla użytkownika, że może kliknąć by edytować
+                                return Text(!isClosed ? 'Paid by: $name (Tap to edit)' : 'Paid by: $name');
                               },
                             ),
                             
@@ -484,7 +650,6 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                 ),
               ),
               
-              // ZMIENIONE: Wywołujemy widok z parametrem isAdmin
               if (isClosed)
                 _buildSettlementResults(settlementData, isAdmin)
               else
@@ -534,7 +699,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                           ElevatedButton(
                             onPressed: _isSettling ? null : _settleGroup,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color.fromARGB(255, 205, 3, 77), // Twój malinowy kolor!
+                              backgroundColor: const Color.fromARGB(255, 205, 3, 77),
                               minimumSize: const Size(double.infinity, 56),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             ),
