@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import 'welcome_screen.dart';
 import 'bank_details_screen.dart';
+import 'terms_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -35,12 +36,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (doc.exists) {
           final data = doc.data() as Map<String, dynamic>;
           setState(() {
-            // POPRAWKA: Pobieramy 'displayName' zamiast 'name'
             _displayName = data['displayName'] ?? 'Unknown User';
             _recoveryKey = data['recoveryKey'] ?? 'ERROR: Key not found';
           });
         } else {
-          // Baza wyczyszczona, ale telefon pamięta sesję
           setState(() {
             _displayName = 'Database Reset (Please Log Out)';
             _recoveryKey = '---';
@@ -52,7 +51,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _recoveryKey = 'N/A';
         });
       } finally {
-        // PANCERNE ROZWIĄZANIE: Zawsze wyłączamy kółko, niezależnie co się stało!
         if (mounted) {
           setState(() => _isLoading = false);
         }
@@ -121,8 +119,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  BoxDecoration _glowCardDecoration(Color accentColor) {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(
+        color: accentColor.withValues(alpha: 0.35),
+        width: 1.5,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: accentColor.withValues(alpha: 0.14),
+          blurRadius: 14,
+          offset: const Offset(0, 5),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    const Color blueAccent = Color(0xFF3B82F6);
+    const Color amberAccent = Color(0xFFF59E0B);
+    const Color emeraldAccent = Color(0xFF10B981);
+    const Color purpleAccent = Color(0xFF8B5CF6);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -142,7 +163,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Sekcja Danych Osobowych
                     const Text(
                       'Display Name',
                       style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600),
@@ -150,14 +170,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Text(
-                        _displayName,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      decoration: _glowCardDecoration(blueAccent),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.person_outline_rounded, color: blueAccent, size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _displayName,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -167,22 +195,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: _glowCardDecoration(amberAccent),
                       child: Row(
                         children: [
+                          const Icon(Icons.vpn_key_outlined, color: amberAccent, size: 22),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               _recoveryKey,
-                              style: const TextStyle(fontSize: 16, letterSpacing: 2, fontWeight: FontWeight.w500),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                letterSpacing: 2,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF0F172A),
+                              ),
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.copy, color: Color(0xFF10B981)),
+                            icon: const Icon(Icons.copy, color: amberAccent),
                             onPressed: () => _copyToClipboard(_recoveryKey, 'Recovery Key'),
                           ),
                         ],
@@ -195,10 +226,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         style: TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                     ),
-                    
-                    const SizedBox(height: 48),
-
-                    // NOWY PRZYCISK: KIERUJE DO USTAWIEN BANKOWYCH
+                    const SizedBox(height: 32),
                     InkWell(
                       onTap: () {
                         Navigator.push(
@@ -209,21 +237,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       borderRadius: BorderRadius.circular(16),
                       child: Container(
                         padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3), width: 1.5),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF10B981).withValues(alpha: 0.1),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
+                        decoration: _glowCardDecoration(emeraldAccent),
                         child: const Row(
                           children: [
-                            Icon(Icons.account_balance, color: Color(0xFF10B981), size: 28),
+                            Icon(Icons.account_balance, color: emeraldAccent, size: 28),
                             SizedBox(width: 16),
                             Expanded(
                               child: Column(
@@ -231,7 +248,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 children: [
                                   Text(
                                     'Bank Details',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0F172A),
+                                    ),
                                   ),
                                   Text(
                                     'Manage account for receiving money',
@@ -245,17 +266,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
-
-                    const SizedBox(height: 48),
-
-                    // Sekcja Zarządzania Kontem
-                    OutlinedButton.icon(
-                      onPressed: _handleLogout,
-                      icon: const Icon(Icons.logout, color: Colors.black87),
-                      label: const Text('Log Out', style: TextStyle(color: Colors.black87)),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    const SizedBox(height: 16),
+                    InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const TermsScreen(isReadOnly: true),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: _glowCardDecoration(purpleAccent),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.gavel_rounded, color: purpleAccent, size: 28),
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Terms & Disclaimer',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                  Text(
+                                    'How QuidSplit works & payment rules',
+                                    style: TextStyle(fontSize: 13, color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(Icons.chevron_right, color: Colors.grey),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 36),
+                    InkWell(
+                      onTap: _handleLogout,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Color(0xFFECFDF5),
+                              Color(0xFFD1FAE5),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: emeraldAccent.withValues(alpha: 0.45),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: emeraldAccent.withValues(alpha: 0.18),
+                              blurRadius: 14,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.logout_rounded, color: Color(0xFF065F46), size: 22),
+                            SizedBox(width: 10),
+                            Text(
+                              'Log Out',
+                              style: TextStyle(
+                                color: Color(0xFF065F46),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),

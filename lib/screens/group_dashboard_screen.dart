@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:qr_flutter/qr_flutter.dart'; 
+import 'package:qr_flutter/qr_flutter.dart';
 import '../services/group_service.dart';
-import '../services/auth_service.dart'; 
+import '../services/auth_service.dart';
 
 class GroupDashboardScreen extends StatefulWidget {
   final String groupId;
@@ -11,7 +12,7 @@ class GroupDashboardScreen extends StatefulWidget {
   const GroupDashboardScreen({
     super.key,
     required this.groupId,
-    this.currentUserId = 'mock_user_id', 
+    this.currentUserId = 'mock_user_id',
   });
 
   @override
@@ -21,7 +22,7 @@ class GroupDashboardScreen extends StatefulWidget {
 class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GroupService _groupService = GroupService();
-  final AuthService _authService = AuthService(); 
+  final AuthService _authService = AuthService();
   final Color _primaryColor = const Color(0xFF10B981);
 
   final TextEditingController _amountController = TextEditingController();
@@ -38,6 +39,12 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
     super.dispose();
   }
 
+  Future<String> _resolveAdminName(String adminId) async {
+    if (adminId.isEmpty) return 'Unknown';
+    if (adminId == widget.currentUserId) return 'You';
+    return await _authService.getUserName(adminId);
+  }
+
   Future<void> _addGhostUser() async {
     final name = _personNameController.text.trim();
     if (name.isEmpty) return;
@@ -48,7 +55,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
         ghostName: name,
         currentUserId: widget.currentUserId,
       );
-      
+
       _personNameController.clear();
       if (mounted) {
         Navigator.pop(context);
@@ -70,23 +77,25 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Add Person'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Add someone who doesn\'t have the app. You can assign expenses to them later.',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _personNameController,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Friend\'s Name (e.g., Aga)',
-                prefixIcon: Icon(Icons.person),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Add someone who doesn\'t have the app. You can assign expenses to them later.',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              TextField(
+                controller: _personNameController,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Friend\'s Name (e.g., Aga)',
+                  prefixIcon: Icon(Icons.person),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -119,9 +128,8 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
       }
     }
 
-    if (mounted) Navigator.pop(context); 
+    if (mounted) Navigator.pop(context);
 
-    // ZMIANA BŁĘDU: Kuloodporne sprawdzenie dla Dropdownu
     String? selectedPayerId;
     if (membersMap.containsKey(widget.currentUserId)) {
       selectedPayerId = widget.currentUserId;
@@ -135,47 +143,49 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
         builder: (context) => StatefulBuilder(
           builder: (context, setState) => AlertDialog(
             title: const Text('Add New Expense'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: _titleController,
-                  decoration: const InputDecoration(
-                    labelText: 'What for? (e.g., Pizza, Taxi)',
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: _titleController,
+                    decoration: const InputDecoration(
+                      labelText: 'What for? (e.g., Pizza, Taxi)',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _amountController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Amount (£)',
-                    prefixIcon: Icon(Icons.currency_pound),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _amountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Amount (£)',
+                      prefixIcon: Icon(Icons.currency_pound),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(
-                    labelText: 'Who paid?',
-                    prefixIcon: Icon(Icons.person),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: 'Who paid?',
+                      prefixIcon: Icon(Icons.person),
+                    ),
+                    value: selectedPayerId,
+                    isExpanded: true,
+                    items: membersMap.entries.map((entry) {
+                      return DropdownMenuItem<String>(
+                        value: entry.key,
+                        child: Text(entry.value, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      );
+                    }).toList(),
+                    onChanged: (String? newValue) {
+                      if (newValue != null) {
+                        setState(() {
+                          selectedPayerId = newValue;
+                        });
+                      }
+                    },
                   ),
-                  value: selectedPayerId,
-                  isExpanded: true,
-                  items: membersMap.entries.map((entry) {
-                    return DropdownMenuItem<String>(
-                      value: entry.key,
-                      child: Text(entry.value, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      setState(() {
-                        selectedPayerId = newValue;
-                      });
-                    }
-                  },
-                ),
-              ],
+                ],
+              ),
             ),
             actions: [
               TextButton(
@@ -211,7 +221,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
           .add({
         'title': title,
         'amount': amount,
-        'paidBy': payerId, 
+        'paidBy': payerId,
         'timestamp': FieldValue.serverTimestamp(),
       });
 
@@ -253,8 +263,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 
     final TextEditingController editTitleController = TextEditingController(text: currentTitle);
     final TextEditingController editAmountController = TextEditingController(text: currentAmount.toString());
-    
-    // ZMIANA BŁĘDU: Kuloodporne sprawdzenie dla edycji
+
     String? selectedPayerId;
     if (membersMap.containsKey(currentPaidBy)) {
       selectedPayerId = currentPaidBy;
@@ -268,45 +277,47 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
         builder: (context) => StatefulBuilder(
           builder: (context, setState) => AlertDialog(
             title: const Text('Edit / Delete Expense'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: editTitleController,
-                  decoration: const InputDecoration(labelText: 'What for?'),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: editAmountController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Amount (£)',
-                    prefixIcon: Icon(Icons.currency_pound),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: editTitleController,
+                    decoration: const InputDecoration(labelText: 'What for?'),
                   ),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(
-                    labelText: 'Who paid?',
-                    prefixIcon: Icon(Icons.person),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: editAmountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Amount (£)',
+                      prefixIcon: Icon(Icons.currency_pound),
+                    ),
                   ),
-                  value: selectedPayerId,
-                  isExpanded: true,
-                  items: membersMap.entries.map((entry) {
-                    return DropdownMenuItem<String>(
-                      value: entry.key,
-                      child: Text(entry.value, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      setState(() {
-                        selectedPayerId = newValue;
-                      });
-                    }
-                  },
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: 'Who paid?',
+                      prefixIcon: Icon(Icons.person),
+                    ),
+                    value: selectedPayerId,
+                    isExpanded: true,
+                    items: membersMap.entries.map((entry) {
+                      return DropdownMenuItem<String>(
+                        value: entry.key,
+                        child: Text(entry.value, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      );
+                    }).toList(),
+                    onChanged: (String? newValue) {
+                      if (newValue != null) {
+                        setState(() {
+                          selectedPayerId = newValue;
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
             actions: [
               TextButton.icon(
@@ -404,41 +415,43 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
     }
   }
 
-  Future<void> _showPaymentQRCode(String creditorId, String creditorName, double amount) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-
+  Future<void> _showPaymentDetails(String creditorId, String creditorName, double amount) async {
     try {
       final doc = await _firestore.collection('users').doc(creditorId).get();
-      if (mounted) Navigator.pop(context); 
 
       if (!doc.exists) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('$creditorName is a guest and doesn\'t have an account.')),
+            const SnackBar(content: Text('This user does not have an account.')),
           );
         }
         return;
       }
 
       final data = doc.data() as Map<String, dynamic>;
-      final sortCode = data['sortCode'] ?? '';
-      final accountNumber = data['accountNumber'] ?? '';
+      final String realName = data['name'] ?? creditorName;
+      final String sortCode = (data['sortCode'] ?? '').toString().trim();
+      final String accountNumber = (data['accountNumber'] ?? '').toString().trim();
+      final String paymentLink = (data['paymentLink'] ?? '').toString().trim();
 
-      if (sortCode.isEmpty || accountNumber.isEmpty) {
+      if (sortCode.isEmpty && accountNumber.isEmpty && paymentLink.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('$creditorName hasn\'t added their bank details securely yet.')),
+            SnackBar(content: Text('No bank details saved for $realName.')),
           );
         }
         return;
       }
 
-      final displaySortCode = '${sortCode.substring(0, 2)}-${sortCode.substring(2, 4)}-${sortCode.substring(4, 6)}';
-      final qrPayload = "paym://payment?name=${Uri.encodeComponent(creditorName)}&sc=$sortCode&acc=$accountNumber&amt=$amount";
+      final String cleanSortCode = sortCode.replaceAll(RegExp(r'[^0-9]'), '');
+      final String displaySortCode = cleanSortCode.length >= 6
+          ? '${cleanSortCode.substring(0, 2)}-${cleanSortCode.substring(2, 4)}-${cleanSortCode.substring(4, 6)}'
+          : sortCode;
+
+      final String formattedAmount = amount.toStringAsFixed(2);
+      final String shareMessage = paymentLink.isNotEmpty
+          ? 'Quid Split settlement: £$formattedAmount to $realName.\nPay online: $paymentLink\nSort Code: $displaySortCode\nAccount: $accountNumber'
+          : 'Quid Split settlement: £$formattedAmount to $realName.\nSort Code: $displaySortCode\nAccount: $accountNumber';
 
       if (mounted) {
         showDialog(
@@ -446,48 +459,172 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
           builder: (context) => AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: Text(
-              'Pay $creditorName', 
-              textAlign: TextAlign.center, 
-              style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF0F172A))
+              'Pay $realName',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Scan with your banking app', style: TextStyle(color: Colors.grey)),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey.shade300),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _primaryColor.withValues(alpha: 0.1),
-                        blurRadius: 15,
-                        offset: const Offset(0, 5),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '£$formattedAmount',
+                    style: const TextStyle(
+                      fontSize: 36,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF10B981),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (paymentLink.isNotEmpty) ...[
+                    SizedBox(
+                      width: 180,
+                      height: 180,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: QrImageView(
+                          data: paymentLink,
+                          foregroundColor: const Color(0xFF0F172A),
+                        ),
                       ),
-                    ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (sortCode.isNotEmpty || accountNumber.isNotEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'SORT CODE',
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    displaySortCode,
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 1.5,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.copy, size: 20, color: Color(0xFF64748B)),
+                                tooltip: 'Copy Sort Code',
+                                onPressed: () {
+                                  Clipboard.setData(ClipboardData(text: cleanSortCode));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Sort Code copied!')),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'ACCOUNT NUMBER',
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    accountNumber,
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 1.5,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.copy, size: 20, color: Color(0xFF64748B)),
+                                tooltip: 'Copy Account Number',
+                                onPressed: () {
+                                  Clipboard.setData(ClipboardData(text: accountNumber));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Account Number copied!')),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  if (accountNumber.isNotEmpty)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _primaryColor,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.copy, color: Colors.white, size: 20),
+                        label: const Text(
+                          'Copy Account Number',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: accountNumber));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Account Number copied! Open your bank app to paste.')),
+                          );
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: const BorderSide(color: Color(0xFF0F172A)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.share, color: Color(0xFF0F172A), size: 20),
+                      label: const Text(
+                        'Copy for WhatsApp / SMS',
+                        style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: shareMessage));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Payment message copied! Paste it into WhatsApp or SMS.')),
+                        );
+                      },
+                    ),
                   ),
-                  child: QrImageView(
-                    data: qrPayload,
-                    version: QrVersions.auto,
-                    size: 200.0,
-                    foregroundColor: const Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  '£${amount.toStringAsFixed(2)}', 
-                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: _primaryColor)
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'SC: $displaySortCode\nACC: $accountNumber', 
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1, color: Color(0xFF64748B)),
-                ),
-              ],
+                ],
+              ),
             ),
             actions: [
               TextButton(
@@ -499,12 +636,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
         );
       }
     } catch (e) {
-      if (mounted) Navigator.pop(context);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading details: $e')),
-        );
-      }
+      debugPrint('Payment details error: $e');
     }
   }
 
@@ -521,119 +653,220 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
     }
 
     return Container(
+      width: double.infinity,
       color: Colors.white,
       padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Final Settlement',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFF0F172A),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Final Settlement',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF0F172A),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          ...settlement.map((s) {
-            final double amount = (s['amount'] as num).toDouble();
-            final String fromId = s['fromUserId'];
-            final String toId = s['toUserId'];
-            
-            final bool isPaid = s['isPaid'] ?? false; 
+            const SizedBox(height: 16),
+            ...settlement.map((s) {
+              final double amount = (s['amount'] as num).toDouble();
+              final String fromId = s['fromUserId'];
+              final String toId = s['toUserId'];
 
-            Future<String> resolveName(String id) async {
-              if (id == widget.currentUserId) return 'You';
-              return await _authService.getUserName(id);
-            }
+              final bool isPaid = s['isPaid'] ?? false;
 
-            return FutureBuilder<List<String>>(
-              future: Future.wait([resolveName(fromId), resolveName(toId)]),
-              builder: (context, snapshot) {
-                String fromName = '...';
-                String toName = '...';
+              Future<String> resolveName(String id) async {
+                if (id == widget.currentUserId) return 'You';
+                return await _authService.getUserName(id);
+              }
 
-                if (snapshot.hasData) {
-                  fromName = snapshot.data![0];
-                  toName = snapshot.data![1];
-                }
+              return FutureBuilder<List<String>>(
+                future: Future.wait([resolveName(fromId), resolveName(toId)]),
+                builder: (context, snapshot) {
+                  String fromName = '...';
+                  String toName = '...';
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  color: isPaid ? Colors.grey.shade50 : Colors.green.shade50,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(
-                      color: isPaid ? Colors.grey.shade300 : Colors.green.shade200,
+                  if (snapshot.hasData) {
+                    fromName = snapshot.data![0];
+                    toName = snapshot.data![1];
+                  }
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    color: isPaid ? Colors.grey.shade50 : Colors.green.shade50,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: isPaid ? Colors.grey.shade300 : Colors.green.shade200,
+                      ),
                     ),
-                  ),
-                  child: ListTile(
-                    leading: Icon(
-                      isPaid ? Icons.check_circle : Icons.payment, 
-                      color: isPaid ? Colors.grey : Colors.green
-                    ),
-                    title: Text(
-                      '$fromName must pay $toName', 
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        decoration: isPaid ? TextDecoration.lineThrough : null,
-                        color: isPaid ? Colors.grey.shade600 : Colors.black,
-                      )
-                    ),
-                    subtitle: isPaid 
-                      ? Text('Settled', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.bold))
-                      : null,
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (!isPaid)
-                          IconButton(
-                            icon: Icon(Icons.qr_code_scanner, color: _primaryColor),
-                            tooltip: 'Pay via QR Code',
-                            onPressed: () => _showPaymentQRCode(toId, toName, amount),
-                          ),
-                        Text(
-                          '£${amount.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            color: isPaid ? Colors.grey.shade500 : Colors.green,
-                            decoration: isPaid ? TextDecoration.lineThrough : null,
-                          ),
+                    child: ListTile(
+                      onTap: !isPaid ? () => _showPaymentDetails(toId, toName, amount) : null,
+                      leading: Icon(
+                        isPaid ? Icons.check_circle : Icons.payment,
+                        color: isPaid ? Colors.grey : Colors.green,
+                      ),
+                      title: Text(
+                        '$fromName must pay $toName',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          decoration: isPaid ? TextDecoration.lineThrough : null,
+                          color: isPaid ? Colors.grey.shade600 : Colors.black,
                         ),
-                        if (isAdmin)
-                          Checkbox(
-                            value: isPaid,
-                            activeColor: Colors.grey,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                            onChanged: (bool? newValue) async {
-                              if (newValue != null) {
-                                try {
-                                  await _groupService.toggleDebtPaymentStatus(
-                                    widget.groupId, 
-                                    fromId, 
-                                    toId, 
-                                    newValue
-                                  );
-                                } catch (e) {
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Error: $e')),
+                      ),
+                      subtitle: isPaid
+                          ? Text('Settled', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.bold))
+                          : null,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!isPaid)
+                            IconButton(
+                              icon: Icon(Icons.account_balance, color: _primaryColor),
+                              tooltip: 'Payment Details',
+                              onPressed: () => _showPaymentDetails(toId, toName, amount),
+                            ),
+                          Text(
+                            '£${amount.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: isPaid ? Colors.grey.shade500 : Colors.green,
+                              decoration: isPaid ? TextDecoration.lineThrough : null,
+                            ),
+                          ),
+                          if (isAdmin)
+                            Checkbox(
+                              value: isPaid,
+                              activeColor: Colors.grey,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                              onChanged: (bool? newValue) async {
+                                if (newValue != null) {
+                                  try {
+                                    await _groupService.toggleDebtPaymentStatus(
+                                      widget.groupId,
+                                      fromId,
+                                      toId,
+                                      newValue,
                                     );
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Error: $e')),
+                                      );
+                                    }
                                   }
                                 }
-                              }
-                            },
-                          ),
-                      ],
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomActionPanel(bool isAdmin, String adminName, List<dynamic> members) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _showAddPersonDialog,
+                    icon: const Icon(Icons.person_add, color: Colors.white, size: 20),
+                    label: const Text('Add Person', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color.fromARGB(255, 19, 45, 105),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
-                );
-              },
-            );
-          }),
-        ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _showAddExpenseDialog(members),
+                    icon: const Icon(Icons.add, color: Colors.white, size: 20),
+                    label: const Text('Add Expense', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _primaryColor,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (isAdmin) ...[
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _isSettling ? null : _settleGroup,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color.fromARGB(255, 205, 3, 77),
+                  minimumSize: const Size(double.infinity, 56),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: _isSettling
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('Settle Up Group', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ] else ...[
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, size: 18, color: Color(0xFF64748B)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Only the group admin ($adminName) can settle up and close this trip.',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF475569),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -655,184 +888,191 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
         stream: _firestore.collection('groups').doc(widget.groupId).snapshots(),
         builder: (context, groupSnapshot) {
           if (groupSnapshot.hasError) return const Center(child: Text('Error loading group data.'));
-          if (groupSnapshot.connectionState == ConnectionState.waiting) return Center(child: CircularProgressIndicator(color: _primaryColor));
+          if (groupSnapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator(color: _primaryColor));
+          }
 
           final groupData = groupSnapshot.data?.data() as Map<String, dynamic>?;
           if (groupData == null) return const Center(child: Text('Group not found.'));
 
           final bool isClosed = groupData['status'] == 'closed';
-          final bool isAdmin = groupData['adminId'] == widget.currentUserId;
+          final String adminId = (groupData['adminId'] ?? '').toString();
+          final bool isAdmin = adminId == widget.currentUserId;
           final List<dynamic> settlementData = groupData['settlement'] ?? [];
           final List<dynamic> members = groupData['members'] as List<dynamic>? ?? [];
 
-          return Column(
-            children: [
-              Container(
-                width: double.infinity,
-                color: const Color(0xFF0F172A),
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    const Text('Group PIN', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                    const SizedBox(height: 8),
-                    Text(
-                      groupData['pin'] ?? 'ERROR',
-                      style: const TextStyle(
-                        color: Colors.white, fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: 8,
-                      ),
-                    ),
-                    if (isClosed)
-                      Container(
-                        margin: const EdgeInsets.only(top: 16),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(12)),
-                        child: const Text('SETTLED & CLOSED', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: _firestore
-                      .collection('groups')
-                      .doc(widget.groupId)
-                      .collection('expenses')
-                      .orderBy('timestamp', descending: true)
-                      .snapshots(),
-                  builder: (context, expenseSnapshot) {
-                    if (expenseSnapshot.hasError) return const Center(child: Text('Error loading expenses.'));
-                    if (expenseSnapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          return FutureBuilder<String>(
+            future: _resolveAdminName(adminId),
+            builder: (context, adminSnapshot) {
+              final String adminName = adminSnapshot.data ?? '...';
 
-                    final expenses = expenseSnapshot.data?.docs ?? [];
-                    if (expenses.isEmpty) {
-                      return const Center(
-                        child: Text('No expenses yet. Add the first one!', style: TextStyle(color: Colors.grey, fontSize: 16)),
-                      );
-                    }
+              return StreamBuilder<QuerySnapshot>(
+                stream: _firestore
+                    .collection('groups')
+                    .doc(widget.groupId)
+                    .collection('expenses')
+                    .orderBy('timestamp', descending: true)
+                    .snapshots(),
+                builder: (context, expenseSnapshot) {
+                  final List<QueryDocumentSnapshot> expenses = expenseSnapshot.data?.docs ?? [];
 
-                    return ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: expenses.length,
-                      itemBuilder: (context, index) {
-                        final expDoc = expenses[index];
-                        final expenseId = expDoc.id; 
-                        final expData = expDoc.data() as Map<String, dynamic>;
-                        
-                        final amount = expData['amount'] ?? 0.0;
-                        final title = expData['title'] ?? 'Unknown';
-                        final String paidById = expData['paidBy'] ?? widget.currentUserId;
-
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          child: ListTile(
-                            onTap: () {
-                              if (!isClosed) {
-                                _showEditExpenseDialog(
-                                  expenseId,
-                                  title,
-                                  amount,
-                                  paidById,
-                                  members,
-                                );
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Cannot edit expenses in a settled group.')),
-                                );
-                              }
-                            },
-                            contentPadding: const EdgeInsets.all(16),
-                            leading: CircleAvatar(
-                              backgroundColor: _primaryColor.withValues(alpha: 0.1),
-                              child: Icon(Icons.receipt_long, color: _primaryColor),
-                            ),
-                            title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                            
-                            subtitle: FutureBuilder<String>(
-                              future: paidById == widget.currentUserId 
-                                  ? Future.value('You') 
-                                  : _authService.getUserName(paidById),
-                              builder: (context, snapshot) {
-                                final name = snapshot.data ?? '...';
-                                return Text(!isClosed ? 'Paid by: $name (Tap to edit)' : 'Paid by: $name');
-                              },
-                            ),
-                            
-                            trailing: Text(
-                              '£${amount.toStringAsFixed(2)}',
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
+                  return CustomScrollView(
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: Container(
+                          width: double.infinity,
+                          color: const Color(0xFF0F172A),
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            children: [
+                              const Text('Group PIN', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                              const SizedBox(height: 8),
+                              Text(
+                                groupData['pin'] ?? 'ERROR',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 40,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 8,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.admin_panel_settings, color: _primaryColor, size: 16),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Admin: $adminName',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (isClosed)
+                                Container(
+                                  margin: const EdgeInsets.only(top: 12),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(12)),
+                                  child: const Text('SETTLED & CLOSED', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                ),
+                            ],
                           ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-              
-              if (isClosed)
-                _buildSettlementResults(settlementData, isAdmin)
-              else
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))
-                    ],
-                  ),
-                  child: SafeArea(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: _showAddPersonDialog,
-                                icon: const Icon(Icons.person_add, color: Colors.white, size: 20),
-                                label: const Text('Add Person', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color.fromARGB(255, 19, 45, 105),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: () => _showAddExpenseDialog(members),
-                                icon: const Icon(Icons.add, color: Colors.white, size: 20),
-                                label: const Text('Add Expense', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _primaryColor, 
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                              ),
-                            ),
-                          ],
                         ),
-                        if (isAdmin) ...[
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: _isSettling ? null : _settleGroup,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color.fromARGB(255, 205, 3, 77),
-                              minimumSize: const Size(double.infinity, 56),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            ),
-                            child: _isSettling
-                                ? const CircularProgressIndicator(color: Colors.white)
-                                : const Text('Settle Up Group', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                      if (expenseSnapshot.hasError)
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.all(24),
+                            child: Center(child: Text('Error loading expenses.')),
                           ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-            ],
+                        )
+                      else if (expenseSnapshot.connectionState == ConnectionState.waiting)
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.all(32),
+                            child: Center(child: CircularProgressIndicator()),
+                          ),
+                        )
+                      else if (expenses.isEmpty)
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+                            child: Center(
+                              child: Text(
+                                'No expenses yet. Add the first one!',
+                                style: TextStyle(color: Colors.grey, fontSize: 16),
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        SliverPadding(
+                          padding: const EdgeInsets.all(16),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                final expDoc = expenses[index];
+                                final expenseId = expDoc.id;
+                                final expData = expDoc.data() as Map<String, dynamic>;
+
+                                final amount = (expData['amount'] as num?)?.toDouble() ?? 0.0;
+                                final title = expData['title'] ?? 'Unknown';
+                                final String paidById = expData['paidBy'] ?? widget.currentUserId;
+
+                                return Card(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  child: ListTile(
+                                    onTap: () {
+                                      if (!isClosed) {
+                                        _showEditExpenseDialog(
+                                          expenseId,
+                                          title,
+                                          amount,
+                                          paidById,
+                                          members,
+                                        );
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Cannot edit expenses in a settled group.')),
+                                        );
+                                      }
+                                    },
+                                    contentPadding: const EdgeInsets.all(16),
+                                    leading: CircleAvatar(
+                                      backgroundColor: _primaryColor.withValues(alpha: 0.1),
+                                      child: Icon(Icons.receipt_long, color: _primaryColor),
+                                    ),
+                                    title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    subtitle: FutureBuilder<String>(
+                                      future: paidById == widget.currentUserId
+                                          ? Future.value('You')
+                                          : _authService.getUserName(paidById),
+                                      builder: (context, snapshot) {
+                                        final name = snapshot.data ?? '...';
+                                        return Text(!isClosed ? 'Paid by: $name (Tap to edit)' : 'Paid by: $name');
+                                      },
+                                    ),
+                                    trailing: Text(
+                                      '£${amount.toStringAsFixed(2)}',
+                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                );
+                              },
+                              childCount: expenses.length,
+                            ),
+                          ),
+                        ),
+                      if (isClosed)
+                        SliverToBoxAdapter(
+                          child: _buildSettlementResults(settlementData, isAdmin),
+                        )
+                      else
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: _buildBottomActionPanel(isAdmin, adminName, members),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              );
+            },
           );
         },
       ),

@@ -13,10 +13,39 @@ class MyGroupsScreen extends StatefulWidget {
 
 class _MyGroupsScreenState extends State<MyGroupsScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final Color _primaryColor = const Color(0xFF10B981); // Nasz zielony grupowy
+  final Color _primaryColor = const Color(0xFF10B981);
   final Color _darkColor = const Color(0xFF0F172A);
 
   String get _safeUserId => FirebaseAuth.instance.currentUser?.uid ?? '';
+
+  Future<void> _showRenameGroupDialog(String groupId, String currentName) async {
+    final String? newName = await showDialog<String>(
+      context: context,
+      builder: (context) => _RenameGroupDialog(
+        initialName: currentName,
+        primaryColor: _primaryColor,
+      ),
+    );
+
+    if (newName == null || newName.isEmpty || newName == currentName) return;
+
+    try {
+      await _firestore.collection('groups').doc(groupId).update({
+        'name': newName,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Group renamed to "$newName".')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error renaming group: $e')),
+        );
+      }
+    }
+  }
 
   void _showDeleteGroupConfirmation(String groupId, String groupName) {
     showDialog(
@@ -79,7 +108,7 @@ class _MyGroupsScreenState extends State<MyGroupsScreen> {
           final aTime = aData['createdAt'] as Timestamp?;
           final bTime = bData['createdAt'] as Timestamp?;
           if (aTime == null || bTime == null) return 0;
-          return bTime.compareTo(aTime); 
+          return bTime.compareTo(aTime);
         });
 
         if (groups.isEmpty) {
@@ -88,9 +117,9 @@ class _MyGroupsScreenState extends State<MyGroupsScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  isClosed ? Icons.inventory_2_outlined : Icons.flight_takeoff, 
-                  size: 64, 
-                  color: Colors.grey.shade300
+                  isClosed ? Icons.inventory_2_outlined : Icons.flight_takeoff,
+                  size: 64,
+                  color: Colors.grey.shade300,
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -103,7 +132,7 @@ class _MyGroupsScreenState extends State<MyGroupsScreen> {
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.only(top: 16, left: 16, right: 16, bottom: 100), // Margines na dolny przycisk
+          padding: const EdgeInsets.only(top: 16, left: 16, right: 16, bottom: 100),
           itemCount: groups.length,
           itemBuilder: (context, index) {
             final group = groups[index];
@@ -122,29 +151,48 @@ class _MyGroupsScreenState extends State<MyGroupsScreen> {
               child: ListTile(
                 contentPadding: const EdgeInsets.all(16),
                 leading: CircleAvatar(
-                  backgroundColor: isClosed ? Colors.grey.shade100 : _primaryColor.withValues(alpha: 0.1),
+                  backgroundColor: isClosed
+                      ? Colors.grey.shade100
+                      : _primaryColor.withValues(alpha: 0.1),
                   child: Icon(
                     isClosed ? Icons.inventory_2 : Icons.local_fire_department,
                     color: isClosed ? Colors.grey : _primaryColor,
                   ),
                 ),
                 title: Text(
-                  groupName, 
+                  groupName,
                   style: TextStyle(
-                    fontWeight: FontWeight.bold, 
+                    fontWeight: FontWeight.bold,
                     fontSize: 18,
                     color: isClosed ? Colors.grey.shade600 : Colors.black,
-                  )
+                  ),
                 ),
-                subtitle: Text('PIN: $pin', style: const TextStyle(fontWeight: FontWeight.w600)),
-                trailing: isClosed 
-                  ? IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                subtitle: Text(
+                  'PIN: $pin',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.edit_outlined, color: Colors.grey.shade600),
+                      tooltip: 'Rename Group',
                       onPressed: () {
-                        _showDeleteGroupConfirmation(group.id, groupName);
+                        _showRenameGroupDialog(group.id, groupName);
                       },
-                    )
-                  : const Icon(Icons.chevron_right, color: Colors.grey),
+                    ),
+                    if (isClosed)
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                        tooltip: 'Delete Group',
+                        onPressed: () {
+                          _showDeleteGroupConfirmation(group.id, groupName);
+                        },
+                      )
+                    else
+                      const Icon(Icons.chevron_right, color: Colors.grey),
+                  ],
+                ),
                 onTap: () {
                   Navigator.push(
                     context,
@@ -191,13 +239,12 @@ class _MyGroupsScreenState extends State<MyGroupsScreen> {
         ),
         body: TabBarView(
           children: [
-            _buildGroupList(false), 
-            _buildGroupList(true),  
+            _buildGroupList(false),
+            _buildGroupList(true),
           ],
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () {
-            // TUTAJ PRZECHODZIMY DO WPISYWANIA PINU (Twój rysunek 1)
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -207,9 +254,80 @@ class _MyGroupsScreenState extends State<MyGroupsScreen> {
           },
           backgroundColor: _darkColor,
           icon: const Icon(Icons.add, color: Colors.white),
-          label: const Text('New / Join', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          label: const Text(
+            'New / Join',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
         ),
       ),
+    );
+  }
+}
+
+class _RenameGroupDialog extends StatefulWidget {
+  final String initialName;
+  final Color primaryColor;
+
+  const _RenameGroupDialog({
+    required this.initialName,
+    required this.primaryColor,
+  });
+
+  @override
+  State<_RenameGroupDialog> createState() => _RenameGroupDialogState();
+}
+
+class _RenameGroupDialogState extends State<_RenameGroupDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Rename Group'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: 40,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: InputDecoration(
+          hintText: 'Enter new group name',
+          counterText: '',
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: widget.primaryColor, width: 2),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: widget.primaryColor),
+          onPressed: () {
+            final newName = _controller.text.trim();
+            if (newName.isEmpty) return;
+            Navigator.pop(context, newName);
+          },
+          child: const Text('Save', style: TextStyle(color: Colors.white)),
+        ),
+      ],
     );
   }
 }

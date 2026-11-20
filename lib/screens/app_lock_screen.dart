@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'home_screen.dart';
+import 'terms_screen.dart';
 
 class AppLockScreen extends StatefulWidget {
   const AppLockScreen({super.key});
@@ -28,42 +30,64 @@ class _AppLockScreenState extends State<AppLockScreen> {
         _isAuthenticating = true;
         _authStatus = 'Authenticating...';
       });
-      
-      // PANCERNE ROZWIĄZANIE: Używamy tylko wymaganego parametru.
-      // Domyślne ustawienia same obsłużą powrót do kodu PIN telefonu.
+
       authenticated = await auth.authenticate(
         localizedReason: 'Please authenticate to access QuidSplit',
       );
-      
-    } on PlatformException catch (e) {
-      debugPrint("Error authenticating: $e");
-      setState(() {
-        _authStatus = 'Authentication error. Try again.';
-      });
-      return;
-    } finally {
+    } catch (e) {
+      debugPrint('Error authenticating: $e');
       if (mounted) {
         setState(() {
           _isAuthenticating = false;
+          _authStatus = 'Authentication error. Try again.';
         });
       }
+      return;
     }
 
     if (authenticated && mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
+      await _checkTermsAndNavigate();
     } else if (mounted) {
       setState(() {
+        _isAuthenticating = false;
         _authStatus = 'Authentication failed. Try again.';
       });
     }
   }
+
+  Future<void> _checkTermsAndNavigate() async {
+    bool hasAcceptedTerms = false;
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get()
+            .timeout(const Duration(seconds: 5));
+        final data = doc.data();
+        hasAcceptedTerms = data?['termsAccepted'] == true;
+      }
+    } catch (e) {
+      debugPrint('Error checking terms acceptance: $e');
+    }
+
+    if (!mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            hasAcceptedTerms ? const HomeScreen() : const TermsScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A), // Ciemny motyw Premium
+      backgroundColor: const Color(0xFF0F172A),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -72,7 +96,11 @@ class _AppLockScreenState extends State<AppLockScreen> {
             const SizedBox(height: 24),
             const Text(
               'QuidSplit Locked',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -86,11 +114,23 @@ class _AppLockScreenState extends State<AppLockScreen> {
               ElevatedButton.icon(
                 onPressed: _authenticate,
                 icon: const Icon(Icons.fingerprint, color: Colors.white),
-                label: const Text('Unlock', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                label: const Text(
+                  'Unlock',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF10B981),
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 16,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
           ],

@@ -14,13 +14,20 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _sortCodeController = TextEditingController();
   final TextEditingController _accountNumberController = TextEditingController();
+  final TextEditingController _paymentLinkController = TextEditingController();
+
+  final List<String> _providers = ['Revolut', 'Starling', 'Monzo', 'PayPal'];
+  String _selectedProvider = 'Revolut';
 
   bool _isLoading = true;
   bool _isSaving = false;
   bool _hasSavedDetails = false;
+  bool _isEditing = false;
 
   String _savedSortCode = '';
   String _savedAccountNumber = '';
+  String _savedPaymentLink = '';
+  String _savedProvider = '';
 
   @override
   void initState() {
@@ -28,21 +35,50 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
     _loadBankDetails();
   }
 
+  String _detectProvider(String link) {
+    final lower = link.toLowerCase();
+    if (lower.contains('starling')) return 'Starling';
+    if (lower.contains('monzo')) return 'Monzo';
+    if (lower.contains('paypal')) return 'PayPal';
+    return 'Revolut';
+  }
+
+  String _getHintForProvider(String provider) {
+    switch (provider) {
+      case 'Starling':
+        return 'https://settleup.starlingbank.com/yourname';
+      case 'Monzo':
+        return 'https://monzo.me/yourname';
+      case 'PayPal':
+        return 'https://paypal.me/yourname';
+      case 'Revolut':
+      default:
+        return 'https://revolut.me/yourname';
+    }
+  }
+
   Future<void> _loadBankDetails() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
 
     try {
       final doc = await _firestore.collection('users').doc(user.uid).get();
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>;
-        final sc = data['sortCode'] ?? '';
-        final ac = data['accountNumber'] ?? '';
+        final sc = (data['sortCode'] ?? '').toString().trim();
+        final ac = (data['accountNumber'] ?? '').toString().trim();
+        final link = (data['paymentLink'] ?? '').toString().trim();
+        final provider = (data['paymentProvider'] ?? '').toString().trim();
 
-        if (sc.isNotEmpty && ac.isNotEmpty) {
+        if ((sc.isNotEmpty && ac.isNotEmpty) || link.isNotEmpty) {
           setState(() {
             _savedSortCode = sc;
             _savedAccountNumber = ac;
+            _savedPaymentLink = link;
+            _savedProvider = provider.isNotEmpty ? provider : (link.isNotEmpty ? _detectProvider(link) : '');
             _hasSavedDetails = true;
           });
         }
@@ -54,43 +90,109 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
     }
   }
 
+  void _startEditing() {
+    setState(() {
+      _sortCodeController.text = _savedSortCode;
+      _accountNumberController.text = _savedAccountNumber;
+      _paymentLinkController.text = _savedPaymentLink;
+      _selectedProvider = _savedProvider.isNotEmpty ? _savedProvider : 'Revolut';
+      _isEditing = true;
+    });
+  }
+
   Future<void> _saveDetails() async {
     final sortCode = _sortCodeController.text.trim();
     final accountNumber = _accountNumberController.text.trim();
+    String paymentLink = _paymentLinkController.text.trim();
 
-    if (sortCode.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sort code must be 6 digits.')));
+    final hasBankInput = sortCode.isNotEmpty || accountNumber.isNotEmpty;
+    final hasLinkInput = paymentLink.isNotEmpty;
+
+    if (!hasBankInput && !hasLinkInput) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter your bank details or a payment link to save.')),
+      );
       return;
     }
-    if (accountNumber.length != 8) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account number must be 8 digits.')));
-      return;
+
+    if (hasBankInput) {
+      if (sortCode.length != 6) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sort code must be 6 digits.')),
+        );
+        return;
+      }
+      if (accountNumber.length != 8) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Account number must be 8 digits.')),
+        );
+        return;
+      }
+    }
+
+    if (hasLinkInput) {
+      if (!paymentLink.startsWith('http://') && !paymentLink.startsWith('https://')) {
+        paymentLink = 'https://$paymentLink';
+      }
+      final uri = Uri.tryParse(paymentLink);
+      if (uri == null || !uri.hasAuthority || !uri.host.contains('.')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Enter a valid $_selectedProvider link.')),
+        );
+        return;
+      }
     }
 
     setState(() => _isSaving = true);
     final user = FirebaseAuth.instance.currentUser;
 
     try {
-      await _firestore.collection('users').doc(user!.uid).update({
-        'sortCode': sortCode,
-        'accountNumber': accountNumber,
-      });
+      final Map<String, dynamic> updateData = {};
+      if (hasBankInput) {
+        updateData['sortCode'] = sortCode;
+        updateData['accountNumber'] = accountNumber;
+      } else {
+        updateData['sortCode'] = FieldValue.delete();
+        updateData['accountNumber'] = FieldValue.delete();
+      }
+
+      if (hasLinkInput) {
+        updateData['paymentLink'] = paymentLink;
+        updateData['paymentProvider'] = _selectedProvider;
+      } else {
+        updateData['paymentLink'] = FieldValue.delete();
+        updateData['paymentProvider'] = FieldValue.delete();
+      }
+
+      await _firestore.collection('users').doc(user!.uid).set(
+        updateData,
+        SetOptions(merge: true),
+      );
 
       setState(() {
-        _savedSortCode = sortCode;
-        _savedAccountNumber = accountNumber;
+        _savedSortCode = hasBankInput ? sortCode : '';
+        _savedAccountNumber = hasBankInput ? accountNumber : '';
+        _savedPaymentLink = hasLinkInput ? paymentLink : '';
+        _savedProvider = hasLinkInput ? _selectedProvider : '';
         _hasSavedDetails = true;
+        _isEditing = false;
         _sortCodeController.clear();
         _accountNumberController.clear();
+        _paymentLinkController.clear();
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Bank details securely encrypted and saved.'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('Payment details securely saved.'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving: $e')));
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -100,8 +202,10 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Remove Bank Details?'),
-        content: const Text('This will permanently delete your receiving account details from the secure database. You will need to enter them again to receive payments via QR code.'),
+        title: const Text('Remove Payment Details?'),
+        content: const Text(
+          'This will permanently delete your receiving bank details and payment link from the database. You can add them again at any time.',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
@@ -114,15 +218,26 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                 await _firestore.collection('users').doc(user!.uid).update({
                   'sortCode': FieldValue.delete(),
                   'accountNumber': FieldValue.delete(),
+                  'paymentLink': FieldValue.delete(),
+                  'paymentProvider': FieldValue.delete(),
                 });
                 setState(() {
                   _hasSavedDetails = false;
+                  _isEditing = false;
                   _savedSortCode = '';
                   _savedAccountNumber = '';
+                  _savedPaymentLink = '';
+                  _savedProvider = '';
                 });
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bank details removed.')));
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Payment details removed.')),
+                  );
+                }
               } catch (e) {
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
               } finally {
                 if (mounted) setState(() => _isLoading = false);
               }
@@ -134,7 +249,6 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
     );
   }
 
-  // Funkcja maskująca numer konta i sort code
   String _maskAccountNumber(String acc) {
     if (acc.length < 4) return acc;
     return '**** **** ${acc.substring(acc.length - 4)}';
@@ -149,16 +263,19 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
   void dispose() {
     _sortCodeController.dispose();
     _accountNumberController.dispose();
+    _paymentLinkController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool showSummary = _hasSavedDetails && !_isEditing;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         title: const Text('Bank Details', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-        backgroundColor: const Color(0xFF10B981), // Zielony motyw finansowy
+        backgroundColor: const Color(0xFF10B981),
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
       ),
@@ -170,7 +287,6 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Wiadomość budująca zaufanie
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -187,10 +303,13 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('100% Safe & Secure', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A), fontSize: 16)),
+                                Text(
+                                  '100% Safe & Secure',
+                                  style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A), fontSize: 16),
+                                ),
                                 SizedBox(height: 6),
                                 Text(
-                                  'QuidSplit never touches your money. We only use these details to generate a standard UK Paym QR code so friends can pay you back directly through their own banking app.',
+                                  'QuidSplit never touches your money. Your details are only shown to members of your groups so they can copy your UK bank details or scan your payment link QR code.',
                                   style: TextStyle(color: Colors.black87, fontSize: 13, height: 1.4),
                                 ),
                               ],
@@ -199,11 +318,13 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 32),
 
-                    // Logika wyświetlania: Formularz ALBO Ukryte dane
-                    if (_hasSavedDetails) ...[
-                      const Text('Your Receiving Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                    if (showSummary) ...[
+                      const Text(
+                        'Your Receiving Details',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      ),
                       const SizedBox(height: 16),
                       Container(
                         padding: const EdgeInsets.all(20),
@@ -215,24 +336,71 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('SORT CODE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
-                            const SizedBox(height: 4),
-                            Text(_formatSortCode(_savedSortCode), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12.0),
-                              child: Divider(),
-                            ),
-                            const Text('ACCOUNT NUMBER', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
-                            const SizedBox(height: 4),
-                            Text(_maskAccountNumber(_savedAccountNumber), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                            if (_savedSortCode.isNotEmpty && _savedAccountNumber.isNotEmpty) ...[
+                              const Text(
+                                'SORT CODE',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _formatSortCode(_savedSortCode),
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                              ),
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12.0),
+                                child: Divider(),
+                              ),
+                              const Text(
+                                'ACCOUNT NUMBER',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _maskAccountNumber(_savedAccountNumber),
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                              ),
+                            ],
+                            if (_savedSortCode.isNotEmpty && _savedPaymentLink.isNotEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12.0),
+                                child: Divider(),
+                              ),
+                            if (_savedPaymentLink.isNotEmpty) ...[
+                              Text(
+                                '${_savedProvider.toUpperCase()} PAYMENT LINK (QR)',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _savedPaymentLink,
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF10B981)),
+                              ),
+                            ],
                           ],
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: _startEditing,
+                        icon: const Icon(Icons.edit_outlined, color: Colors.white),
+                        label: const Text(
+                          'Edit / Add Payment Link',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF10B981),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       OutlinedButton.icon(
                         onPressed: _confirmDeleteDetails,
                         icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        label: const Text('Remove Bank Details', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                        label: const Text(
+                          'Remove Payment Details',
+                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                        ),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           side: const BorderSide(color: Colors.red),
@@ -240,8 +408,11 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                         ),
                       ),
                     ] else ...[
-                      const Text('Add Account Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                      const SizedBox(height: 16),
+                      const Text(
+                        'UK Bank Transfer (Optional)',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      ),
+                      const SizedBox(height: 12),
                       TextField(
                         controller: _sortCodeController,
                         keyboardType: TextInputType.number,
@@ -273,7 +444,62 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                           fillColor: Colors.white,
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 28),
+                      const Text(
+                        'Instant Payment Link for QR (Optional)',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Choose your provider and paste your payment link to generate a scannable QR code.',
+                        style: TextStyle(fontSize: 13, color: Colors.black54),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _providers.map((provider) {
+                          final isSelected = _selectedProvider == provider;
+                          return ChoiceChip(
+                            label: Text(
+                              provider,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isSelected ? Colors.white : const Color(0xFF0F172A),
+                              ),
+                            ),
+                            selected: isSelected,
+                            selectedColor: const Color(0xFF10B981),
+                            backgroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: BorderSide(
+                                color: isSelected ? const Color(0xFF10B981) : Colors.grey.shade300,
+                              ),
+                            ),
+                            onSelected: (selected) {
+                              if (selected) {
+                                setState(() => _selectedProvider = provider);
+                              }
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: _paymentLinkController,
+                        keyboardType: TextInputType.url,
+                        autocorrect: false,
+                        decoration: InputDecoration(
+                          labelText: '$_selectedProvider Payment Link',
+                          hintText: _getHintForProvider(_selectedProvider),
+                          prefixIcon: const Icon(Icons.qr_code_2),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          filled: true,
+                          fillColor: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
                       ElevatedButton(
                         onPressed: _isSaving ? null : _saveDetails,
                         style: ElevatedButton.styleFrom(
@@ -282,9 +508,23 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         child: _isSaving
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : const Text('Securely Save Details', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : const Text(
+                                'Securely Save Details',
+                                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
                       ),
+                      if (_isEditing) ...[
+                        const SizedBox(height: 12),
+                        TextButton(
+                          onPressed: () => setState(() => _isEditing = false),
+                          child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                        ),
+                      ],
                     ],
                   ],
                 ),
