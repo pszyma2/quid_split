@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'services/auth_service.dart';
-import 'screens/home_screen.dart'; // Możesz zostawić, jeśli używasz go gdzieś niżej, choć AppLockScreen go wywoła
+import 'screens/home_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'firebase_options.dart';
 import 'screens/app_lock_screen.dart';
@@ -11,6 +12,15 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+      systemNavigationBarColor: Color(0xFFF8FAFC),
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ),
+  );
   runApp(const MyApp());
 }
 
@@ -19,17 +29,30 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Inicjujemy nasz serwis
     final authService = AuthService();
     final String? currentUserId = authService.getCurrentUserId();
 
     return MaterialApp(
-      title: 'QuidSplit', // Nazwa publiczna
+      title: 'QuidSplit UK',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF10B981)),
         useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          systemOverlayStyle: SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.light,
+            statusBarBrightness: Brightness.dark,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(28),
+              bottomRight: Radius.circular(28),
+            ),
+          ),
+        ),
       ),
-      // ZMIANA: Zależnie od tego, czy mamy UID, ładujemy kłódkę (AppLockScreen) lub powitanie (WelcomeScreen)
       home: currentUserId == null ? const WelcomeScreen() : const AppLockScreen(),
     );
   }

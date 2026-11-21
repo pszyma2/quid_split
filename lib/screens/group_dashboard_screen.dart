@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../services/group_service.dart';
 import '../services/auth_service.dart';
@@ -31,6 +32,14 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 
   bool _isSettling = false;
 
+  String get _effectiveCurrentUserId {
+    final authUid = FirebaseAuth.instance.currentUser?.uid;
+    if (authUid != null && authUid.isNotEmpty) {
+      return authUid;
+    }
+    return widget.currentUserId;
+  }
+
   @override
   void dispose() {
     _amountController.dispose();
@@ -41,7 +50,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 
   Future<String> _resolveAdminName(String adminId) async {
     if (adminId.isEmpty) return 'Unknown';
-    if (adminId == widget.currentUserId) return 'You';
+    if (adminId == _effectiveCurrentUserId) return 'You';
     return await _authService.getUserName(adminId);
   }
 
@@ -53,7 +62,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
       await _groupService.addGhostUserToGroup(
         groupId: widget.groupId,
         ghostName: name,
-        currentUserId: widget.currentUserId,
+        currentUserId: _effectiveCurrentUserId,
       );
 
       _personNameController.clear();
@@ -119,9 +128,10 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
+    final String currentUid = _effectiveCurrentUserId;
     Map<String, String> membersMap = {};
     for (String id in memberIds) {
-      if (id == widget.currentUserId) {
+      if (id == currentUid) {
         membersMap[id] = 'You';
       } else {
         membersMap[id] = await _authService.getUserName(id);
@@ -131,8 +141,8 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
     if (mounted) Navigator.pop(context);
 
     String? selectedPayerId;
-    if (membersMap.containsKey(widget.currentUserId)) {
-      selectedPayerId = widget.currentUserId;
+    if (membersMap.containsKey(currentUid)) {
+      selectedPayerId = currentUid;
     } else if (membersMap.isNotEmpty) {
       selectedPayerId = membersMap.keys.first;
     }
@@ -194,7 +204,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: _primaryColor),
-                onPressed: () => _addExpense(selectedPayerId ?? widget.currentUserId),
+                onPressed: () => _addExpense(selectedPayerId ?? currentUid),
                 child: const Text('Add', style: TextStyle(color: Colors.white)),
               ),
             ],
@@ -250,9 +260,10 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
+    final String currentUid = _effectiveCurrentUserId;
     Map<String, String> membersMap = {};
     for (String id in memberIds) {
-      if (id == widget.currentUserId) {
+      if (id == currentUid) {
         membersMap[id] = 'You';
       } else {
         membersMap[id] = await _authService.getUserName(id);
@@ -398,7 +409,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
   Future<void> _settleGroup() async {
     setState(() => _isSettling = true);
     try {
-      await _groupService.settleGroup(widget.groupId, widget.currentUserId);
+      await _groupService.settleGroup(widget.groupId, _effectiveCurrentUserId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Group settled successfully!')),
@@ -450,8 +461,8 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 
       final String formattedAmount = amount.toStringAsFixed(2);
       final String shareMessage = paymentLink.isNotEmpty
-          ? 'Quid Split settlement: £$formattedAmount to $realName.\nPay online: $paymentLink\nSort Code: $displaySortCode\nAccount: $accountNumber'
-          : 'Quid Split settlement: £$formattedAmount to $realName.\nSort Code: $displaySortCode\nAccount: $accountNumber';
+          ? 'Quid Split settlement: £$formattedAmount to $realName.\nPay online:$paymentLink\nSort Code: $displaySortCode\nAccount:$accountNumber'
+          : 'Quid Split settlement: £$formattedAmount to$realName.\nSort Code: $displaySortCode\nAccount:$accountNumber';
 
       if (mounted) {
         showDialog(
@@ -652,6 +663,8 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
       );
     }
 
+    final String currentUid = _effectiveCurrentUserId;
+
     return Container(
       width: double.infinity,
       color: Colors.white,
@@ -679,7 +692,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
               final bool isPaid = s['isPaid'] ?? false;
 
               Future<String> resolveName(String id) async {
-                if (id == widget.currentUserId) return 'You';
+                if (id == currentUid) return 'You';
                 return await _authService.getUserName(id);
               }
 
@@ -711,7 +724,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                         color: isPaid ? Colors.grey : Colors.green,
                       ),
                       title: Text(
-                        '$fromName must pay $toName',
+                        '$fromName must pay$toName',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           decoration: isPaid ? TextDecoration.lineThrough : null,
@@ -873,6 +886,8 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final String currentUid = _effectiveCurrentUserId;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -897,7 +912,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 
           final bool isClosed = groupData['status'] == 'closed';
           final String adminId = (groupData['adminId'] ?? '').toString();
-          final bool isAdmin = adminId == widget.currentUserId;
+          final bool isAdmin = adminId == currentUid;
           final List<dynamic> settlementData = groupData['settlement'] ?? [];
           final List<dynamic> members = groupData['members'] as List<dynamic>? ?? [];
 
@@ -921,16 +936,23 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                       SliverToBoxAdapter(
                         child: Container(
                           width: double.infinity,
-                          color: const Color(0xFF0F172A),
-                          padding: const EdgeInsets.all(24),
+                          color: const Color(0xFFF8FAFC),
+                          padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
                           child: Column(
                             children: [
-                              const Text('Group PIN', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                              const Text(
+                                'Group PIN',
+                                style: TextStyle(
+                                  color: Color(0xFF0F172A),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                               const SizedBox(height: 8),
                               Text(
                                 groupData['pin'] ?? 'ERROR',
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: _primaryColor,
                                   fontSize: 40,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 8,
@@ -940,9 +962,9 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.1),
+                                  color: Colors.white,
                                   borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                                  border: Border.all(color: Colors.grey.shade300),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -952,7 +974,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                                     Text(
                                       'Admin: $adminName',
                                       style: const TextStyle(
-                                        color: Colors.white,
+                                        color: Color(0xFF0F172A),
                                         fontSize: 13,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -1009,7 +1031,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 
                                 final amount = (expData['amount'] as num?)?.toDouble() ?? 0.0;
                                 final title = expData['title'] ?? 'Unknown';
-                                final String paidById = expData['paidBy'] ?? widget.currentUserId;
+                                final String paidById = expData['paidBy'] ?? currentUid;
 
                                 return Card(
                                   margin: const EdgeInsets.only(bottom: 12),
@@ -1037,12 +1059,12 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                                     ),
                                     title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
                                     subtitle: FutureBuilder<String>(
-                                      future: paidById == widget.currentUserId
+                                      future: paidById == currentUid
                                           ? Future.value('You')
                                           : _authService.getUserName(paidById),
                                       builder: (context, snapshot) {
                                         final name = snapshot.data ?? '...';
-                                        return Text(!isClosed ? 'Paid by: $name (Tap to edit)' : 'Paid by: $name');
+                                        return Text(!isClosed ? 'Paid by: $name (Tap to edit)' : 'Paid by:$name');
                                       },
                                     ),
                                     trailing: Text(

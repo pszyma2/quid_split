@@ -16,6 +16,8 @@ class _MyGroupsScreenState extends State<MyGroupsScreen> {
   final Color _primaryColor = const Color(0xFF10B981);
   final Color _darkColor = const Color(0xFF0F172A);
 
+  bool _showArchive = false;
+
   String get _safeUserId => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   Future<void> _showRenameGroupDialog(String groupId, String currentName) async {
@@ -86,6 +88,84 @@ class _MyGroupsScreenState extends State<MyGroupsScreen> {
     );
   }
 
+  Widget _buildPillSwitch() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _showArchive = false),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: !_showArchive ? _primaryColor : Colors.transparent,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.local_fire_department,
+                        size: 18,
+                        color: !_showArchive ? Colors.white : const Color(0xFF64748B),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Active Trips',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: !_showArchive ? Colors.white : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _showArchive = true),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _showArchive ? _primaryColor : Colors.transparent,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.inventory_2,
+                        size: 18,
+                        color: _showArchive ? Colors.white : const Color(0xFF64748B),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Archive',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: _showArchive ? Colors.white : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildGroupList(bool isClosed) {
     return StreamBuilder<QuerySnapshot>(
       stream: _firestore
@@ -132,7 +212,7 @@ class _MyGroupsScreenState extends State<MyGroupsScreen> {
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.only(top: 16, left: 16, right: 16, bottom: 100),
+          padding: const EdgeInsets.only(top: 12, left: 16, right: 16, bottom: 100),
           itemCount: groups.length,
           itemBuilder: (context, index) {
             final group = groups[index];
@@ -214,50 +294,39 @@ class _MyGroupsScreenState extends State<MyGroupsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        appBar: AppBar(
-          backgroundColor: _primaryColor,
-          elevation: 0,
-          iconTheme: const IconThemeData(color: Colors.white),
-          title: const Text(
-            'My Group Trips',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-          bottom: const TabBar(
-            indicatorColor: Colors.white,
-            indicatorWeight: 3,
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white54,
-            tabs: [
-              Tab(icon: Icon(Icons.local_fire_department), text: 'Active Trips'),
-              Tab(icon: Icon(Icons.inventory_2), text: 'Archive'),
-            ],
-          ),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: _primaryColor,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text(
+          'My Group Trips',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        body: TabBarView(
-          children: [
-            _buildGroupList(false),
-            _buildGroupList(true),
-          ],
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => GroupGatewayScreen(currentUserId: _safeUserId),
-              ),
-            );
-          },
-          backgroundColor: _darkColor,
-          icon: const Icon(Icons.add, color: Colors.white),
-          label: const Text(
-            'New / Join',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      ),
+      body: Column(
+        children: [
+          _buildPillSwitch(),
+          Expanded(
+            child: _buildGroupList(_showArchive),
           ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => GroupGatewayScreen(currentUserId: _safeUserId),
+            ),
+          );
+        },
+        backgroundColor: _darkColor,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text(
+          'New / Join',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
     );

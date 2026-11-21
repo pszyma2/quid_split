@@ -103,7 +103,7 @@ class _TermsScreenState extends State<TermsScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Terms Version $_currentTermsVersion • PaG Studio • Made in the UK',
+                    'Terms Version $_currentTermsVersion • PaG Studio • Made in the UK 🇬🇧',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12,
@@ -160,20 +160,20 @@ class _TermsScreenState extends State<TermsScreen> {
                   ),
                 ),
               Container(
-                width: 44,
-                height: 44,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(13),
                   border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                 ),
                 child: const Icon(
                   Icons.gavel_rounded,
                   color: Color(0xFF34D399),
-                  size: 24,
+                  size: 22,
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -194,7 +194,7 @@ class _TermsScreenState extends State<TermsScreen> {
                           : 'PLEASE READ & ACCEPT TO CONTINUE',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.7),
-                        fontSize: 10.5,
+                        fontSize: 10,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.1,
                       ),

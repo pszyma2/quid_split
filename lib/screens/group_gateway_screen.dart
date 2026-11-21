@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/group_service.dart';
 import 'group_dashboard_screen.dart';
 
@@ -24,6 +25,14 @@ class _GroupGatewayScreenState extends State<GroupGatewayScreen> {
 
   final Color _primaryColor = const Color(0xFF10B981);
 
+  String get _effectiveCurrentUserId {
+    final authUid = FirebaseAuth.instance.currentUser?.uid;
+    if (authUid != null && authUid.isNotEmpty) {
+      return authUid;
+    }
+    return widget.currentUserId;
+  }
+
   @override
   void dispose() {
     _groupNameController.dispose();
@@ -45,7 +54,8 @@ class _GroupGatewayScreenState extends State<GroupGatewayScreen> {
     });
 
     try {
-      String groupId = await _groupService.createGroup(groupName, widget.currentUserId);
+      final String currentUid = _effectiveCurrentUserId;
+      String groupId = await _groupService.createGroup(groupName, currentUid);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -53,7 +63,12 @@ class _GroupGatewayScreenState extends State<GroupGatewayScreen> {
         );
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => GroupDashboardScreen(groupId: groupId)),
+          MaterialPageRoute(
+            builder: (_) => GroupDashboardScreen(
+              groupId: groupId,
+              currentUserId: currentUid,
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -77,7 +92,8 @@ class _GroupGatewayScreenState extends State<GroupGatewayScreen> {
     });
 
     try {
-      String groupId = await _groupService.joinGroupWithPin(pin, widget.currentUserId);
+      final String currentUid = _effectiveCurrentUserId;
+      String groupId = await _groupService.joinGroupWithPin(pin, currentUid);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -85,7 +101,12 @@ class _GroupGatewayScreenState extends State<GroupGatewayScreen> {
         );
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => GroupDashboardScreen(groupId: groupId)),
+          MaterialPageRoute(
+            builder: (_) => GroupDashboardScreen(
+              groupId: groupId,
+              currentUserId: currentUid,
+            ),
+          ),
         );
       }
     } catch (e) {

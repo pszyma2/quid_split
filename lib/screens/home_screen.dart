@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'quick_split_screen.dart';
 import 'friend_transfer_screen.dart';
@@ -12,114 +13,121 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
-      body: Column(
-        children: [
-          _buildHeader(context),
-          Expanded(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'What do you need to do?',
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF0F172A),
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Choose how you want to split or take payments today.',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: Color(0xFF64748B),
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  _buildFeatureCard(
-                    context: context,
-                    badgeText: 'STRIPE • COMMERCIAL',
-                    title: 'Quick Pay',
-                    subtitle: 'Card, Apple & Google Pay. Take secure payments on markets & fairs via Stripe.',
-                    icon: Icons.contactless_rounded,
-                    color: const Color(0xFFF59E0B),
-                    secondaryColor: const Color(0xFFD97706),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const QuickSplitScreen()),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 18),
-                  _buildFeatureCard(
-                    context: context,
-                    badgeText: '0% FEE • MAX £20',
-                    title: 'Free Bank Transfer',
-                    subtitle: 'Generate an instant QR code via Revolut, Starling, Monzo or PayPal.',
-                    icon: Icons.qr_code_2_rounded,
-                    color: const Color(0xFF8B5CF6),
-                    secondaryColor: const Color(0xFF6D28D9),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => FriendTransferScreen(currentUserId: _safeUserId),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 18),
-                  _buildFeatureCard(
-                    context: context,
-                    badgeText: 'SHARED • UNLIMITED',
-                    title: 'Group Trips',
-                    subtitle: 'Create or join a group for pub rounds, holidays and shared expenses.',
-                    icon: Icons.flight_takeoff_rounded,
-                    color: const Color(0xFF10B981),
-                    secondaryColor: const Color(0xFF059669),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const MyGroupsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 32),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.verified_user_outlined,
-                        size: 15,
-                        color: const Color(0xFF64748B).withValues(alpha: 0.8),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF1F5F9),
+        body: Column(
+          children: [
+            _buildHeader(context),
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'What do you need to do?',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF0F172A),
+                        letterSpacing: -0.5,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'PaG Studio • Made in the UK 🇬🇧',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Choose how you want to split or take payments today.',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: Color(0xFF64748B),
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildFeatureCard(
+                      context: context,
+                      badgeText: 'STRIPE • COMMERCIAL',
+                      title: 'Quick Pay',
+                      subtitle: 'Card, Apple & Google Pay. Take secure payments on markets & fairs via Stripe.',
+                      icon: Icons.contactless_rounded,
+                      color: const Color(0xFFF59E0B),
+                      secondaryColor: const Color(0xFFD97706),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const QuickSplitScreen()),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    _buildFeatureCard(
+                      context: context,
+                      badgeText: '0% FEE • MAX £20',
+                      title: 'Free Bank Transfer',
+                      subtitle: 'Generate an instant QR code via Revolut, Starling, Monzo or PayPal.',
+                      icon: Icons.qr_code_2_rounded,
+                      color: const Color(0xFF8B5CF6),
+                      secondaryColor: const Color(0xFF6D28D9),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => FriendTransferScreen(currentUserId: _safeUserId),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    _buildFeatureCard(
+                      context: context,
+                      badgeText: 'SHARED • UNLIMITED',
+                      title: 'Group Trips',
+                      subtitle: 'Create or join a group for pub rounds, holidays and shared expenses.',
+                      icon: Icons.flight_takeoff_rounded,
+                      color: const Color(0xFF10B981),
+                      secondaryColor: const Color(0xFF059669),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const MyGroupsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 32),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.verified_user_outlined,
+                          size: 15,
                           color: const Color(0xFF64748B).withValues(alpha: 0.8),
-                          letterSpacing: 0.4,
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        const SizedBox(width: 6),
+                        Text(
+                          'PaG Studio • Made in the UK 🇬🇧',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF64748B).withValues(alpha: 0.8),
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

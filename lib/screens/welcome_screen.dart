@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import 'app_lock_screen.dart'; // <-- ZMIENIONY IMPORT NA EKRAN BLOKADY
+import 'app_lock_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -13,9 +13,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _keyController = TextEditingController();
   final AuthService _authService = AuthService();
-  
+
   bool _isLoading = false;
-  bool _isRestoring = false; // Przełącznik trybów
+  bool _isRestoring = false;
 
   Future<void> _createProfile() async {
     final name = _nameController.text.trim();
@@ -33,8 +33,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          // <-- ZMIANA: Kierujemy na ekran blokady zamiast bezpośrednio do Home
-          MaterialPageRoute(builder: (context) => const AppLockScreen()), 
+          MaterialPageRoute(builder: (context) => const AppLockScreen()),
         );
       }
     } catch (e) {
@@ -61,8 +60,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          // <-- ZMIANA: Kierujemy na ekran blokady zamiast bezpośrednio do Home
-          MaterialPageRoute(builder: (context) => const AppLockScreen()), 
+          MaterialPageRoute(builder: (context) => const AppLockScreen()),
         );
       }
     } catch (e) {
@@ -71,7 +69,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           SnackBar(
             content: Text(e.toString().replaceAll('Exception: ', '')),
             backgroundColor: Colors.redAccent,
-          )
+          ),
         );
         setState(() => _isLoading = false);
       }
@@ -113,15 +111,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                _isRestoring 
-                    ? 'Paste your 16-character recovery key.' 
+                _isRestoring
+                    ? 'Paste your 16-character recovery key.'
                     : 'How should your friends call you?',
                 style: const TextStyle(fontSize: 16, color: Colors.white70),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 48),
-              
-              // POLA TEKSTOWE ZALEŻNE OD TRYBU
               if (!_isRestoring)
                 TextField(
                   controller: _nameController,
@@ -156,7 +152,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                   ),
                 ),
-                
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _isLoading ? null : (_isRestoring ? _restoreProfile : _createProfile),
@@ -179,8 +174,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       ),
               ),
               const SizedBox(height: 16),
-              
-              // PRZYCISK PRZEŁĄCZAJĄCY TRYB
               TextButton(
                 onPressed: () {
                   setState(() {
@@ -188,12 +181,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   });
                 },
                 child: Text(
-                  _isRestoring 
-                      ? "I don't have a key. Create new account." 
+                  _isRestoring
+                      ? "I don't have a key. Create new account."
                       : "Already have an account? Restore via Key",
                   style: const TextStyle(color: Colors.white54),
                 ),
-              )
+              ),
             ],
           ),
         ),
